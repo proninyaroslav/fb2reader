@@ -10,7 +10,6 @@ import 'package:merlin/UI/router.dart';
 import 'package:merlin/components/books_page_header.dart';
 import 'package:merlin/functions/book.dart';
 import 'package:merlin/pages/books/book_item.dart';
-import 'package:merlin/pages/page.dart';
 import 'package:merlin/pages/recent/bookloader.dart';
 import 'package:merlin/pages/recent/books_recent_cubit.dart';
 import 'package:merlin/pages/recent/books_recent_state.dart';
@@ -49,7 +48,6 @@ class RecentPageState extends State<RecentPage> {
     );
 
     WidgetsBinding.instance.addPostFrameCallback((_) async {
-      AppPage.startRecentPageShowCase(context);
       await _initData();
     });
 

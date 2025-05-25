@@ -21,7 +21,6 @@ import 'package:merlin/functions/book.dart';
 import 'package:merlin/pages/books/book_item.dart';
 import 'package:merlin/pages/books/books_cubit.dart';
 import 'package:merlin/pages/books/books_state.dart';
-import 'package:merlin/pages/page.dart';
 import 'package:merlin/pages/recent/bookloader.dart';
 import 'package:merlin/pages/recent/books_recent_cubit.dart';
 import 'package:merlin/style/colors.dart';
@@ -83,7 +82,7 @@ class BooksPageState extends State<BooksPage> {
       });
       if (mounted) {
         if (isGranted) {
-          AppPage.startShowCase(context);
+          // AppPage.startShowCase(context);
         } else if (pref.getBool("isShowPermissionsDialogLater") != true) {
           final result = await showDialog<bool>(
               context: context,
@@ -91,7 +90,7 @@ class BooksPageState extends State<BooksPage> {
                     pref.setBool("isShowPermissionsDialogLater", true);
                   }));
           if (mounted) {
-            AppPage.startShowCase(context);
+            // AppPage.startShowCase(context);
           }
           if (result == true) {
             final isGranted = await _requestStoragePermission();
