@@ -663,8 +663,10 @@ class _StoragePermissionDialog extends StatelessWidget {
     return BackdropFilter(
       filter: ImageFilter.blur(sigmaX: 5, sigmaY: 5),
       child: AlertDialog(
-        content: const Text(
-          """Для чтения книг разрешите доступ на следующем экране""",
+        content: TextTektur(
+          text: "Для чтения книг разрешите доступ на следующем экране",
+          textColor: MyColors.black,
+          fontsize: 16,
         ),
         actions: <Widget>[
           TextButton(
