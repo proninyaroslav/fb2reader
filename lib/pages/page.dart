@@ -315,7 +315,7 @@ class Page extends State<AppPage> {
                         child: const Profile(),
                       )
                     : _widgetOptions[_selectedPage],
-                floatingActionButton: profile == false && _selectedPage != 0
+                floatingActionButton: profile == false
                     ? Showcase(
                         key: _five,
                         disableMovingAnimation: true,
