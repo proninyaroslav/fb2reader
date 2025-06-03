@@ -5,4 +5,7 @@ class SvgAsset {
   static const String merlin = 'assets/images/merlinAnon2.svg';
 
   static const String merlinStart = 'assets/images/merlinStart.svg';
+
+  static const String arrowLong = 'assets/images/arrow-long.svg';
+  static const String arrowShort = 'assets/images/arrow-short.svg';
 }
