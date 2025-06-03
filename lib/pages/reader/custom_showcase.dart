@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
+import 'package:is_first_run/is_first_run.dart';
 import 'package:merlin/components/svg/svg_asset.dart';
 
 const _kTextColor =
@@ -21,7 +22,20 @@ class _CustomShowcaseState extends State<CustomShowcase> {
     const _ThirdSlide(),
   ];
   int _currentSlide = 0;
-  bool _show = true;
+  bool _show = false;
+
+  @override
+  void initState() {
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      final show =
+          await IsFirstRun.isFirstRun() && await IsFirstRun.isFirstCall();
+      setState(() {
+        _show = show;
+      });
+    });
+
+    super.initState();
+  }
 
   @override
   Widget build(BuildContext context) {
