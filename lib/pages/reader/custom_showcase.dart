@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
-import 'package:is_first_run/is_first_run.dart';
 import 'package:merlin/components/svg/svg_asset.dart';
 
 const _kTextColor =
@@ -12,29 +11,20 @@ class CustomShowcase extends StatefulWidget {
   const CustomShowcase({super.key, required this.builder});
 
   @override
-  State<CustomShowcase> createState() => _CustomShowcaseState();
+  State<CustomShowcase> createState() => CustomShowcaseState();
 }
 
-class _CustomShowcaseState extends State<CustomShowcase> {
-  final _slides = [
-    const _FirstSlide(),
-    const _SecondSlide(),
-    const _ThirdSlide(),
-  ];
+class CustomShowcaseState extends State<CustomShowcase> {
+  List<Widget> _slides = [];
   int _currentSlide = 0;
   bool _show = false;
 
-  @override
-  void initState() {
-    WidgetsBinding.instance.addPostFrameCallback((_) async {
-      final show =
-          await IsFirstRun.isFirstRun() && await IsFirstRun.isFirstCall();
-      setState(() {
-        _show = show;
-      });
+  void showSlides(List<Widget> slides) {
+    _slides = slides;
+    setState(() {
+      _currentSlide = 0;
+      _show = true;
     });
-
-    super.initState();
   }
 
   @override
@@ -81,7 +71,7 @@ class _Container extends StatelessWidget {
           border: border ?? const BoxBorder.fromBorderSide(borderSide)),
       padding: const EdgeInsets.all(4.0),
       child: Center(
-        child: child,
+        child: FittedBox(child: child),
       ),
     );
   }
@@ -104,8 +94,8 @@ class _Text extends StatelessWidget {
   }
 }
 
-class _FirstSlide extends StatelessWidget {
-  const _FirstSlide({super.key});
+class FirstSlide extends StatelessWidget {
+  const FirstSlide({super.key});
 
   @override
   Widget build(BuildContext context) {
@@ -135,7 +125,7 @@ class _FirstSlide extends StatelessWidget {
             top: cc.maxHeight / 6,
             bottom: cc.maxHeight / 6,
             width: 100,
-            child: _Container(child: _buildChild('swipe\n\nшрифт')),
+            child: _Container(child: _buildChild('swipe\n\nяркость')),
           )
         ],
       );
@@ -156,18 +146,20 @@ class _FirstSlide extends StatelessWidget {
       );
 }
 
-class _SecondSlide extends StatelessWidget {
-  const _SecondSlide({super.key});
+class SecondSlide extends StatelessWidget {
+  const SecondSlide({super.key});
 
   @override
   Widget build(BuildContext context) {
     final leftAndRight = _Container(
+      border: BoxBorder.fromSTEB(
+          top: _Container.borderSide, bottom: _Container.borderSide),
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
           const Padding(
             padding: EdgeInsets.symmetric(vertical: 32.0),
-            child: _Text(text: 'листать вперед\n\ntap'),
+            child: _Text(text: 'листать\nвперед\n\ntap'),
           ),
           RotatedBox(
               quarterTurns: 2, child: SvgPicture.asset(SvgAsset.arrowShort)),
@@ -175,12 +167,36 @@ class _SecondSlide extends StatelessWidget {
       ),
     );
     final top = _Container(
-        border: BoxBorder.fromSTEB(top: _Container.borderSide),
-        child: const _Text(text: 'tap\n\nлистать\nназад'));
-    final bottom = _Container(
-      border: BoxBorder.fromSTEB(
-          top: _Container.borderSide, bottom: _Container.borderSide),
-      child: const _Text(text: 'tap\n\nполный\nэкран'),
+        border: BoxBorder.fromSTEB(
+            start: _Container.borderSide,
+            end: _Container.borderSide,
+            top: _Container.borderSide),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            RotatedBox(
+                quarterTurns: 2,
+                child: SvgPicture.asset(SvgAsset.arrowExtraShort)),
+            const Padding(
+                padding: EdgeInsets.only(top: 16.0),
+                child: _Text(text: 'tap\n\nлистать\nназад')),
+          ],
+        ));
+    const bottom = _Container(
+      child: _Text(text: 'tap\n\nполный\nэкран'),
+    );
+    final bottomTap = _Container(
+      border: BoxBorder.fromSTEB(bottom: _Container.borderSide),
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          const Padding(
+            padding: EdgeInsets.only(bottom: 16.0),
+            child: _Text(text: 'tap'),
+          ),
+          SvgPicture.asset(SvgAsset.arrowExtraShort)
+        ],
+      ),
     );
 
     return LayoutBuilder(builder: (context, cc) {
@@ -216,14 +232,21 @@ class _SecondSlide extends StatelessWidget {
             width: 100,
             child: leftAndRight,
           ),
+          Positioned(
+            left: 100,
+            right: 100,
+            bottom: bottomPadding,
+            top: 3 * cc.maxHeight / 4,
+            child: bottomTap,
+          ),
         ],
       );
     });
   }
 }
 
-class _ThirdSlide extends StatelessWidget {
-  const _ThirdSlide({super.key});
+class ThirdSlide extends StatelessWidget {
+  const ThirdSlide({super.key});
 
   @override
   Widget build(BuildContext context) {

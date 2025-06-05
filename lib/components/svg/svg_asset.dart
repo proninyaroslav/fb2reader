@@ -8,4 +8,5 @@ class SvgAsset {
 
   static const String arrowLong = 'assets/images/arrow-long.svg';
   static const String arrowShort = 'assets/images/arrow-short.svg';
+  static const String arrowExtraShort = 'assets/images/arrow-extra-short.svg';
 }
