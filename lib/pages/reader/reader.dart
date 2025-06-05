@@ -4,11 +4,13 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 import 'dart:math';
-import 'package:flutter/rendering.dart';
+import 'dart:ui' as ui;
+
+import 'package:battery_plus/battery_plus.dart';
+import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_screen_wake/flutter_screen_wake.dart';
 import 'package:fluttertoast/fluttertoast.dart';
-import 'package:intl/intl.dart';
 import 'package:merlin/UI/icon/custom_icon.dart';
 import 'package:merlin/UI/router.dart';
 import 'package:merlin/UI/theme/theme.dart';
@@ -16,6 +18,7 @@ import 'package:merlin/domain/data_providers/color_provider.dart';
 import 'package:merlin/functions/book.dart';
 import 'package:merlin/functions/post_statistic.dart';
 import 'package:merlin/main.dart';
+import 'package:merlin/pages/reader/custom_showcase.dart';
 import 'package:merlin/pages/wordmode/models/word_entry.dart';
 import 'package:merlin/pages/wordmode/wordmode.dart';
 import 'package:merlin/style/colors.dart';
@@ -24,10 +27,8 @@ import 'package:path_provider/path_provider.dart';
 import 'package:provider/provider.dart';
 import 'package:scrollable_positioned_list/scrollable_positioned_list.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:battery_plus/battery_plus.dart';
-import 'package:showcaseview/showcaseview.dart';
-import 'package:flutter/material.dart';
-import 'dart:ui' as ui;
+
+GlobalKey _showcaseKey = GlobalKey<CustomShowcaseState>();
 
 class LastPosition {
   double offset;
@@ -66,7 +67,9 @@ class Reader extends State with WidgetsBindingObserver {
       customTitle: "customTitle",
       author: "author",
       progress: 0,
-      lastPosition: 0);
+      lastPosition: 0,
+      sequence: null,
+      dateAdded: DateTime.fromMillisecondsSinceEpoch(0));
   bool loading = true;
   double fontSize = 18;
   bool isDarkTheme = false;
@@ -93,13 +96,6 @@ class Reader extends State with WidgetsBindingObserver {
   double percentage = 0;
 
   List<String> translatedText = List.empty();
-
-  final GlobalKey _four = GlobalKey();
-  final GlobalKey _five = GlobalKey();
-  final GlobalKey _six = GlobalKey();
-  final GlobalKey _seven = GlobalKey();
-  final GlobalKey _eight = GlobalKey();
-  final GlobalKey _nine = GlobalKey();
 
   BuildContext? myContext;
   double vFontSize = 18.0;
@@ -186,18 +182,8 @@ class Reader extends State with WidgetsBindingObserver {
     WidgetsBinding.instance.addPostFrameCallback((_) async {
       Future.delayed(const Duration(milliseconds: 300), () async {
         final prefs = await SharedPreferences.getInstance();
-        bool isFirstRun;
-        try {
-          isFirstRun = prefs.getBool("hi") ?? true;
-        } on Exception {
-          isFirstRun = true;
-        }
         await prefs.setBool("hi", false);
 
-        if (isFirstRun) {
-          ShowCaseWidget.of(myContext!)
-              .startShowCase([_four, _five, _six, _seven, _eight, _nine]);
-        }
         //await firstRunReset();
         while (!loading) {
           lastPageCount = prefs.getDouble('pageCount-${book.filePath}') ?? 0;
@@ -220,6 +206,11 @@ class Reader extends State with WidgetsBindingObserver {
           if (book.text.isNotEmpty) {
             break;
           }
+        }
+        if (prefs.getBool('readerShowcase') != true) {
+          (_showcaseKey.currentState as CustomShowcaseState?)
+              ?.showSlides([const FirstSlide(), const SecondSlide()]);
+          prefs.setBool('readerShowcase', true);
         }
       });
     });
@@ -244,9 +235,9 @@ class Reader extends State with WidgetsBindingObserver {
   void didChangeAppLifecycleState(AppLifecycleState state) async {
     if (state == AppLifecycleState.paused) {
       await _savePageCountToLocalStorage();
-      await getPageCount(book.title, isBorder);
+      getPageCount(book.title, isBorder);
+      update();
       final prefs = await SharedPreferences.getInstance();
-      await update();
       lastPageCount = prefs.getDouble('pageCount-${book.filePath}') ?? 0;
       prefs.setDouble('lastPageCount-${book.filePath}', lastPageCount);
     }
@@ -314,7 +305,7 @@ class Reader extends State with WidgetsBindingObserver {
             _scrollOffsetController.animateScroll(
                 offset: book.lastPosition ?? 0,
                 duration: const Duration(microseconds: 1));
-            book.version = 2;
+            // book.version = 2;
           }
         });
       } catch (e) {
@@ -461,8 +452,8 @@ class Reader extends State with WidgetsBindingObserver {
   void replaceWordsWithTranslation(List<WordEntry> wordEntries) async {
     final prefs = await SharedPreferences.getInstance();
     await _savePageCountToLocalStorage();
-    await getPageCount(book.title, isBorder);
-    await update();
+    getPageCount(book.title, isBorder);
+    update();
     lastPageCount = prefs.getDouble('pageCount-${book.filePath}') ?? 0;
     prefs.setDouble('lastPageCount-${book.filePath}', lastPageCount);
 
@@ -573,10 +564,10 @@ class Reader extends State with WidgetsBindingObserver {
     if (code == 'ru') {
       if (result == true) {
         await _savePageCountToLocalStorage();
-        await getPageCount(book.title, isBorder);
-        final prefs = await SharedPreferences.getInstance();
+        getPageCount(book.title, isBorder);
+        update();
 
-        await update();
+        final prefs = await SharedPreferences.getInstance();
 
         lastPageCount = prefs.getDouble('pageCount-${book.filePath}') ?? 0;
         prefs.setDouble('lastPageCount-${book.filePath}', lastPageCount);
@@ -590,9 +581,9 @@ class Reader extends State with WidgetsBindingObserver {
         await showTableDialog(context, wordCount, true);
       } else if (result == false) {
         await _savePageCountToLocalStorage();
-        await getPageCount(book.title, isBorder);
+        getPageCount(book.title, isBorder);
+        update();
         final prefs = await SharedPreferences.getInstance();
-        await update();
         lastPageCount = prefs.getDouble('pageCount-${book.filePath}') ?? 0;
         prefs.setDouble('lastPageCount-${book.filePath}', lastPageCount);
         // Действие, выполняемое после нажатия "Нет"
@@ -615,7 +606,7 @@ class Reader extends State with WidgetsBindingObserver {
       BuildContext context, WordCount wordCount, bool confirm) async {
     var wordsMap = await WordCount(filePath: book.filePath, fileText: book.text)
         .getAllWordCounts();
-    showDialog<void>(
+    await showDialog<void>(
       context: context,
       builder: (BuildContext context) {
         final themeProvider =
@@ -692,7 +683,7 @@ class Reader extends State with WidgetsBindingObserver {
                                                       0, 0, 20, 0),
                                               icon: const Icon(Icons.close),
                                               onPressed: () async {
-                                                await saveWordCountToLocalstorage(
+                                                saveWordCountToLocalstorage(
                                                     wordCount);
                                                 replaceWordsWithTranslation(
                                                     wordCount.wordEntries);
@@ -1312,6 +1303,12 @@ class Reader extends State with WidgetsBindingObserver {
         );
       },
     );
+    final prefs = await SharedPreferences.getInstance();
+    if (prefs.getBool('wordsShowcase') != true) {
+      (_showcaseKey.currentState as CustomShowcaseState?)
+          ?.showSlides([const ThirdSlide()]);
+      prefs.setBool('wordsShowcase', true);
+    }
   }
 
   static double safemod(double a, double n) {
@@ -2090,14 +2087,16 @@ class Reader extends State with WidgetsBindingObserver {
           if (storedData == null) {
             await prefs.setString('lastCallTimestamp', "19710101T030000+0300");
           }
-          if (elapsedTime.inHours >= 24 || storedData == null) {
-            wordModeDialog(context);
-          } else {
-            var tempWE = await loadWordCountFromLocalStorage();
-            if (tempWE.filePath != '') {
-              replaceWordsWithTranslation(tempWE.wordEntries);
-            }
-          }
+          wordModeDialog(context);
+          // TODO: пока убрано
+          // if (elapsedTime.inHours >= 24 || storedData == null) {
+          //   wordModeDialog(context);
+          // } else {
+          //   var tempWE = await loadWordCountFromLocalStorage();
+          //   if (tempWE.filePath != '') {
+          //     replaceWordsWithTranslation(tempWE.wordEntries);
+          //   }
+          // }
         } else {
           wordModeDialog(context);
         }
@@ -2111,17 +2110,18 @@ class Reader extends State with WidgetsBindingObserver {
         prefs.setDouble('lastPageCount-${book.filePath}', lastPageCount);
         isBorder = false;
         setState(() {});
-        var timeLast = await readTimeFromJsonFile(fileName);
-        if (timeLast != null) {
-          final formattedTime = DateFormat('dd.MM.yy HH:mm')
-              .format(timeLast.add(const Duration(days: 1)));
+        // TODO: пока убрано
+        // var timeLast = await readTimeFromJsonFile(fileName);
+        // if (timeLast != null) {
+        //   final formattedTime = DateFormat('dd.MM.yy HH:mm')
+        //       .format(timeLast.add(const Duration(days: 1)));
 
-          Fluttertoast.showToast(
-            msg: 'Новый перевод будет доступен $formattedTime',
-            toastLength: Toast.LENGTH_LONG,
-            gravity: ToastGravity.BOTTOM,
-          );
-        }
+        //   Fluttertoast.showToast(
+        //     msg: 'Новый перевод будет доступен $formattedTime',
+        //     toastLength: Toast.LENGTH_LONG,
+        //     gravity: ToastGravity.BOTTOM,
+        //   );
+        // }
         break;
     }
   }
@@ -2132,106 +2132,93 @@ class Reader extends State with WidgetsBindingObserver {
     final size = MediaQuery.of(context);
 
     return PopScope(
-        onPopInvoked: (bool didPop) async {
+        canPop: false,
+        onPopInvokedWithResult: (bool didPop, result) async {
           await update();
 
           await _savePageCountToLocalStorage();
-          await getPageCount(book.title, isBorder);
+          getPageCount(book.title, isBorder);
+          if (!didPop) {
+            Navigator.pop(context, percentage / 100);
+          }
         },
         child: !loading
-            ? ShowCaseWidget(builder: (context) {
-                myContext = context;
-                return Scaffold(
-                  appBar: visible
-                      ? PreferredSize(
-                          preferredSize:
-                              Size(MediaQuery.of(context).size.width, 50),
-                          child: AnimatedContainer(
-                            duration: const Duration(milliseconds: 250),
-                            child: AppBar(
-                                leading: GestureDetector(
-                                    onTap: () async {
-                                      await update();
-                                      Navigator.pop(context, true);
-                                    },
-                                    child: Theme(
-                                      data: lightTheme(),
-                                      child: Showcase(
-                                        key: _four,
-                                        disableMovingAnimation: true,
-                                        description: 'Выход из книги',
-                                        onToolTipClick: () {
-                                          ShowCaseWidget.of(context)
-                                              .completed(_four);
-                                        },
+            ? CustomShowcase(
+                key: _showcaseKey,
+                builder: (context) {
+                  return Scaffold(
+                    appBar: visible
+                        ? PreferredSize(
+                            preferredSize:
+                                Size(MediaQuery.of(context).size.width, 50),
+                            child: AnimatedContainer(
+                              duration: const Duration(milliseconds: 250),
+                              child: AppBar(
+                                  leading: GestureDetector(
+                                      onTap: () async {
+                                        await update();
+                                        Navigator.pop(
+                                            context, percentage / 100);
+                                      },
+                                      child: Theme(
+                                        data: lightTheme(),
                                         child: Icon(
                                           CustomIcons.chevronLeft,
                                           size: 30,
                                           color:
                                               Theme.of(context).iconTheme.color,
                                         ),
-                                      ),
-                                    )),
-                                backgroundColor:
-                                    Theme.of(context).colorScheme.primary,
-                                shadowColor: Colors.transparent,
-                                title: Row(
-                                  mainAxisAlignment:
-                                      MainAxisAlignment.spaceBetween,
-                                  children: [
-                                    Expanded(
-                                      child: SingleChildScrollView(
-                                        scrollDirection: Axis.horizontal,
-                                        clipBehavior: Clip.antiAlias,
-                                        child: Text(
-                                          book.author.isNotEmpty &&
-                                                  book.customTitle.isNotEmpty
-                                              ? '${book.author.toString()}. ${book.customTitle.toString()}'
-                                              : 'Нет автора',
-                                          softWrap: false,
-                                          overflow: TextOverflow.fade,
-                                          style: TextStyle(
-                                              fontSize: 16,
-                                              fontFamily: 'Tektur',
-                                              color: themeProvider.isDarkTheme
-                                                  ? MyColors.white
-                                                  : MyColors.black),
+                                      )),
+                                  backgroundColor:
+                                      Theme.of(context).colorScheme.primary,
+                                  shadowColor: Colors.transparent,
+                                  title: Row(
+                                    mainAxisAlignment:
+                                        MainAxisAlignment.spaceBetween,
+                                    children: [
+                                      Expanded(
+                                        child: SingleChildScrollView(
+                                          scrollDirection: Axis.horizontal,
+                                          clipBehavior: Clip.antiAlias,
+                                          child: Text(
+                                            book.author.isNotEmpty &&
+                                                    book.customTitle.isNotEmpty
+                                                ? '${book.author.toString()}. ${book.customTitle.toString()}'
+                                                : 'Нет автора',
+                                            softWrap: false,
+                                            overflow: TextOverflow.fade,
+                                            style: TextStyle(
+                                                fontSize: 16,
+                                                fontFamily: 'Tektur',
+                                                color: themeProvider.isDarkTheme
+                                                    ? MyColors.white
+                                                    : MyColors.black),
+                                          ),
                                         ),
                                       ),
-                                    ),
-                                    Padding(
-                                      padding: const EdgeInsets.fromLTRB(
-                                          35, 0, 0, 0),
-                                      child: GestureDetector(
-                                        onTap: () {
-                                          timer.cancel();
-                                          Navigator.pushNamed(context,
-                                                  RouteNames.readerSettings)
-                                              .then((value) {
-                                            FlutterScreenWake.brightness
+                                      Padding(
+                                        padding: const EdgeInsets.fromLTRB(
+                                            35, 0, 0, 0),
+                                        child: GestureDetector(
+                                          onTap: () {
+                                            timer.cancel();
+                                            Navigator.pushNamed(context,
+                                                    RouteNames.readerSettings)
                                                 .then((value) {
-                                              brigtness = value;
-                                              timer = Timer.periodic(
-                                                  const Duration(
-                                                      milliseconds: 100),
-                                                  (Timer t) {
-                                                FlutterScreenWake.setBrightness(
-                                                    brigtness);
+                                              FlutterScreenWake.brightness
+                                                  .then((value) {
+                                                brigtness = value;
+                                                timer = Timer.periodic(
+                                                    const Duration(
+                                                        milliseconds: 100),
+                                                    (Timer t) {
+                                                  FlutterScreenWake
+                                                      .setBrightness(brigtness);
+                                                });
                                               });
+                                              loadStylePreferences();
                                             });
-                                            loadStylePreferences();
-                                          });
-                                        },
-                                        child: Showcase(
-                                          key: _five,
-                                          onToolTipClick: () {
-                                            ShowCaseWidget.of(context)
-                                                .completed(_five);
                                           },
-                                          disableMovingAnimation: true,
-                                          description:
-                                              "В Настройках можно менять размер шрифта, яркость текста, а также выбрать один из четырех вариантов цвета текста и фона.\n"
-                                              "Все изменения отображаются в окне «Текстовый тест темы»",
                                           child: Icon(
                                             CustomIcons.sliders,
                                             size: 28,
@@ -2241,134 +2228,163 @@ class Reader extends State with WidgetsBindingObserver {
                                           ),
                                         ),
                                       ),
-                                    ),
-                                  ],
-                                )),
-                          ),
-                        )
-                      : null,
-                  body: Container(
-                      decoration: BoxDecoration(
-                          color: backgroundColor,
-                          border: isBorder == true
-                              ? Border.all(
-                                  color: const Color.fromRGBO(0, 255, 163, 1),
-                                  width: 2)
-                              : Border.all(
-                                  width: 0, color: Colors.transparent)),
-                      child: Stack(
-                        children: [
-                          SafeArea(
-                            top: true,
-                            bottom: false,
-                            minimum: visible
-                                ? const EdgeInsets.only(
-                                    top: 0, left: 8, right: 8)
-                                : orientations[currentOrientationIndex] ==
-                                            DeviceOrientation.landscapeLeft ||
-                                        orientations[currentOrientationIndex] ==
-                                            DeviceOrientation.landscapeRight
-                                    ? const EdgeInsets.only(
-                                        top: 0, left: 8, right: 8)
-                                    : const EdgeInsets.only(
-                                        top: 40, left: 8, right: 8),
-                            child: LayoutBuilder(builder: (context, cc) {
-                              height = cc.maxHeight;
-                              width = cc.maxWidth;
-                              return Stack(children: [
-                                GestureDetector(
-                                  onTap: () {
-                                    // Скролл вниз / следующая страница
-                                    animateTo(false);
-                                  },
-                                  child: ScrollablePositionedList.builder(
-                                      itemPositionsListener:
-                                          _itemPositionsListener,
-                                      itemScrollController:
-                                          _itemScrollController,
-                                      itemCount: isBorder
-                                          ? translatedText.length
-                                          : text.length,
-                                      scrollOffsetController:
-                                          _scrollOffsetController,
-                                      scrollOffsetListener:
-                                          _scrollOffsetListener,
-                                      itemBuilder: (context, index) => RichText(
+                                    ],
+                                  )),
+                            ),
+                          )
+                        : null,
+                    body: Container(
+                        decoration: BoxDecoration(
+                            color: backgroundColor,
+                            border: isBorder == true
+                                ? Border.all(
+                                    color: const Color.fromRGBO(0, 255, 163, 1),
+                                    width: 2)
+                                : Border.all(
+                                    width: 0, color: Colors.transparent)),
+                        child: Stack(
+                          children: [
+                            SafeArea(
+                              top: true,
+                              bottom: false,
+                              minimum: visible
+                                  ? const EdgeInsets.only(
+                                      top: 0, left: 8, right: 8)
+                                  : orientations[currentOrientationIndex] ==
+                                              DeviceOrientation.landscapeLeft ||
+                                          orientations[
+                                                  currentOrientationIndex] ==
+                                              DeviceOrientation.landscapeRight
+                                      ? const EdgeInsets.only(
+                                          top: 0, left: 8, right: 8)
+                                      : const EdgeInsets.only(
+                                          top: 40, left: 8, right: 8),
+                              child: LayoutBuilder(builder: (context, cc) {
+                                height = cc.maxHeight;
+                                width = cc.maxWidth;
+                                return Stack(children: [
+                                  GestureDetector(
+                                    onTap: () {
+                                      // Скролл вниз / следующая страница
+                                      animateTo(false);
+                                    },
+                                    child: ScrollablePositionedList.builder(
+                                        itemPositionsListener:
+                                            _itemPositionsListener,
+                                        itemScrollController:
+                                            _itemScrollController,
+                                        itemCount: isBorder
+                                            ? translatedText.length
+                                            : text.length,
+                                        scrollOffsetController:
+                                            _scrollOffsetController,
+                                        scrollOffsetListener:
+                                            _scrollOffsetListener,
+                                        itemBuilder: (context, index) =>
+                                            RichText(
+                                                text: TextSpan(
+                                              text: isBorder
+                                                  ? translatedText[index]
+                                                  : text[index],
+                                              style: TextStyle(
+                                                  fontSize: fontSize,
+                                                  color: textColor,
+                                                  height: 1.41,
+                                                  locale:
+                                                      const Locale('ru', 'RU')),
+                                            ))),
+                                  ),
+                                  Positioned(
+                                      left: 100,
+                                      right: 100,
+                                      height: visible
+                                          ? 2 * cc.maxHeight / 3
+                                          : cc.maxHeight / 2,
+                                      child: GestureDetector(
+                                          behavior: HitTestBehavior.translucent,
+                                          onTap: () {
+                                            // Скролл вверх / предыдущая страница
+                                            animateTo(true);
+                                          })),
+                                  Positioned(
+                                      right: 0,
+                                      top: cc.maxHeight / 6,
+                                      bottom: cc.maxHeight / 6,
+                                      width: 100,
+                                      child: GestureDetector(
+                                        behavior: HitTestBehavior.translucent,
+                                        onVerticalDragStart: (details) async {
+                                          brigtness = await FlutterScreenWake
+                                              .brightness;
+                                        },
+                                        onVerticalDragUpdate: (details) {
+                                          brigtness -= details.delta.dy / 1000;
+                                          brigtness = min(1, max(0, brigtness));
+                                        },
+                                      )),
+                                  Positioned(
+                                      left: 0,
+                                      top: cc.maxHeight / 6,
+                                      bottom: cc.maxHeight / 6,
+                                      width: 100,
+                                      child: GestureDetector(
+                                          behavior: HitTestBehavior.translucent,
+                                          onVerticalDragStart: (details) {
+                                            oldFs = fontSize;
+                                            final frst = _itemPositionsListener
+                                                .itemPositions
+                                                .value
+                                                .first
+                                                .index;
+                                            final tp = TextPainter(
                                               text: TextSpan(
-                                            text: isBorder
-                                                ? translatedText[index]
-                                                : text[index],
-                                            style: TextStyle(
-                                                fontSize: fontSize,
-                                                color: textColor,
-                                                height: 1.41,
-                                                locale:
-                                                    const Locale('ru', 'RU')),
-                                          ))),
-                                ),
-                                Positioned(
-                                    left: 100,
-                                    right: 100,
-                                    height: visible
-                                        ? 2 * cc.maxHeight / 3
-                                        : cc.maxHeight / 2,
-                                    child: GestureDetector(
-                                        behavior: HitTestBehavior.translucent,
-                                        onTap: () {
-                                          // Скролл вверх / предыдущая страница
-                                          animateTo(true);
-                                        })),
-                                Positioned(
-                                    right: 0,
-                                    top: cc.maxHeight / 6,
-                                    bottom: cc.maxHeight / 6,
-                                    width: 100,
-                                    child: GestureDetector(
-                                      behavior: HitTestBehavior.translucent,
-                                      onVerticalDragStart: (details) async {
-                                        brigtness =
-                                            await FlutterScreenWake.brightness;
-                                      },
-                                      onVerticalDragUpdate: (details) {
-                                        brigtness -= details.delta.dy / 1000;
-                                        brigtness = min(1, max(0, brigtness));
-                                      },
-                                    )),
-                                Positioned(
-                                    left: 0,
-                                    top: cc.maxHeight / 6,
-                                    bottom: cc.maxHeight / 6,
-                                    width: 100,
-                                    child: GestureDetector(
-                                        behavior: HitTestBehavior.translucent,
-                                        onVerticalDragStart: (details) {
-                                          oldFs = fontSize;
-                                          final frst = _itemPositionsListener
-                                              .itemPositions.value.first.index;
-                                          final tp = TextPainter(
-                                            text: TextSpan(
-                                                text: isBorder
-                                                    ? translatedText[frst]
-                                                    : text[frst],
-                                                style: TextStyle(
-                                                    color: Colors.black,
-                                                    fontSize: fontSize,
-                                                    height: 1.41,
-                                                    locale: const Locale(
-                                                        'ru', 'RU'))),
-                                            textAlign: TextAlign.left,
-                                            textDirection: ui.TextDirection.ltr,
-                                          )..layout(maxWidth: cc.maxWidth);
-                                          textPosOld = tp
-                                              .getPositionForOffset(Offset(
-                                                  0, position(cc.maxHeight)))
-                                              .offset;
-                                          textPosOldIndex = frst;
+                                                  text: isBorder
+                                                      ? translatedText[frst]
+                                                      : text[frst],
+                                                  style: TextStyle(
+                                                      color: Colors.black,
+                                                      fontSize: fontSize,
+                                                      height: 1.41,
+                                                      locale: const Locale(
+                                                          'ru', 'RU'))),
+                                              textAlign: TextAlign.left,
+                                              textDirection:
+                                                  ui.TextDirection.ltr,
+                                            )..layout(maxWidth: cc.maxWidth);
+                                            textPosOld = tp
+                                                .getPositionForOffset(Offset(
+                                                    0, position(cc.maxHeight)))
+                                                .offset;
+                                            textPosOldIndex = frst;
 
-                                          textTimer?.cancel();
-                                          textTimer = Timer.periodic(
-                                              const Duration(milliseconds: 60),
-                                              (timer) {
+                                            textTimer?.cancel();
+                                            textTimer = Timer.periodic(
+                                                const Duration(
+                                                    milliseconds: 60), (timer) {
+                                              if ((fontSize * 2)
+                                                      .floorToDouble() !=
+                                                  (vFontSize * 2)
+                                                      .floorToDouble()) {
+                                                fontSize = (vFontSize * 2)
+                                                        .floorToDouble() /
+                                                    2;
+                                                _itemScrollController.jumpTo(
+                                                    index: textPosOldIndex!);
+                                              }
+                                            });
+                                          },
+                                          onVerticalDragUpdate: (details) {
+                                            vFontSize -= details.delta.dy / 20;
+                                            vFontSize = min(vFontSize, 72);
+                                            vFontSize = max(vFontSize, 10);
+                                          },
+                                          onVerticalDragEnd: (detalis) async {
+                                            textTimer?.cancel();
+                                            if ((fontSize - oldFs).abs() <
+                                                0.1) {
+                                              return;
+                                            }
+
                                             if ((fontSize * 2)
                                                     .floorToDouble() !=
                                                 (vFontSize * 2)
@@ -2379,88 +2395,101 @@ class Reader extends State with WidgetsBindingObserver {
                                               _itemScrollController.jumpTo(
                                                   index: textPosOldIndex!);
                                             }
-                                          });
-                                        },
-                                        onVerticalDragUpdate: (details) {
-                                          vFontSize -= details.delta.dy / 20;
-                                          vFontSize = min(vFontSize, 72);
-                                          vFontSize = max(vFontSize, 10);
-                                        },
-                                        onVerticalDragEnd: (detalis) async {
-                                          textTimer?.cancel();
-                                          if ((fontSize - oldFs).abs() < 0.1) {
-                                            return;
-                                          }
 
-                                          if ((fontSize * 2).floorToDouble() !=
-                                              (vFontSize * 2).floorToDouble()) {
-                                            fontSize = (vFontSize * 2)
-                                                    .floorToDouble() /
-                                                2;
-                                            _itemScrollController.jumpTo(
-                                                index: textPosOldIndex!);
-                                          }
+                                            final txt = isBorder
+                                                ? translatedText[
+                                                    textPosOldIndex!]
+                                                : text[textPosOldIndex!];
+                                            final tp = TextPainter(
+                                              text: TextSpan(
+                                                  text: txt,
+                                                  style: TextStyle(
+                                                      color: Colors.black,
+                                                      fontSize: fontSize,
+                                                      height: 1.41,
+                                                      locale: const Locale(
+                                                          'ru', 'RU'))),
+                                              textAlign: TextAlign.left,
+                                              textDirection:
+                                                  ui.TextDirection.ltr,
+                                            )..layout(maxWidth: cc.maxWidth);
 
-                                          final txt = isBorder
-                                              ? translatedText[textPosOldIndex!]
-                                              : text[textPosOldIndex!];
-                                          final tp = TextPainter(
-                                            text: TextSpan(
-                                                text: txt,
-                                                style: TextStyle(
-                                                    color: Colors.black,
-                                                    fontSize: fontSize,
-                                                    height: 1.41,
-                                                    locale: const Locale(
-                                                        'ru', 'RU'))),
-                                            textAlign: TextAlign.left,
-                                            textDirection: ui.TextDirection.ltr,
-                                          )..layout(maxWidth: cc.maxWidth);
-
-                                          lineHeight = tp.preferredLineHeight;
-                                          baseline = tp
-                                              .computeDistanceToActualBaseline(
-                                                  TextBaseline.alphabetic);
-                                          final off = tp
-                                              .getBoxesForSelection(
-                                                  TextSelection(
-                                                      baseOffset: textPosOld!,
-                                                      extentOffset:
-                                                          textPosOld! + 1))[0]
-                                              .top;
-                                          if (off > 5) {
-                                            WidgetsBinding.instance
-                                                .addPostFrameCallback((time) =>
-                                                    _scrollOffsetController
-                                                        .animateScroll(
-                                                            offset: off,
-                                                            duration:
-                                                                const Duration(
-                                                                    microseconds:
-                                                                        1)));
-                                          }
-                                          setState(() {});
-                                        })),
-                                isBorder
-                                    ? Positioned(
-                                        top: cc.maxHeight / 6,
-                                        bottom: visible
-                                            ? cc.maxHeight / 4
-                                            : cc.maxHeight / 5,
-                                        left: 100,
-                                        right: 100,
-                                        child: GestureDetector(
+                                            lineHeight = tp.preferredLineHeight;
+                                            baseline = tp
+                                                .computeDistanceToActualBaseline(
+                                                    TextBaseline.alphabetic);
+                                            final off = tp
+                                                .getBoxesForSelection(
+                                                    TextSelection(
+                                                        baseOffset: textPosOld!,
+                                                        extentOffset:
+                                                            textPosOld! + 1))[0]
+                                                .top;
+                                            if (off > 5) {
+                                              WidgetsBinding.instance
+                                                  .addPostFrameCallback((time) =>
+                                                      _scrollOffsetController
+                                                          .animateScroll(
+                                                              offset: off,
+                                                              duration:
+                                                                  const Duration(
+                                                                      microseconds:
+                                                                          1)));
+                                            }
+                                            setState(() {});
+                                          })),
+                                  isBorder
+                                      ? Positioned(
+                                          top: cc.maxHeight / 6,
+                                          bottom: visible
+                                              ? cc.maxHeight / 4
+                                              : cc.maxHeight / 5,
+                                          left: 100,
+                                          right: 100,
+                                          child: GestureDetector(
+                                              behavior:
+                                                  HitTestBehavior.translucent,
+                                              onVerticalDragEnd:
+                                                  (dragEndDetails) async {
+                                                if (dragEndDetails
+                                                        .primaryVelocity! >
+                                                    0) {
+                                                  showSavedWords(
+                                                      context, book.filePath);
+                                                }
+                                              },
+                                              onTap: () {
+                                                setState(() {
+                                                  visible = !visible;
+                                                });
+                                                if (visible) {
+                                                  SystemChrome
+                                                      .setEnabledSystemUIMode(
+                                                    SystemUiMode.manual,
+                                                    overlays: [
+                                                      SystemUiOverlay.top,
+                                                      SystemUiOverlay.bottom,
+                                                    ],
+                                                  );
+                                                } else {
+                                                  SystemChrome
+                                                      .setEnabledSystemUIMode(
+                                                          SystemUiMode
+                                                              .immersive);
+                                                }
+                                              }))
+                                      : Positioned(
+                                          top: visible
+                                              ? cc.maxHeight / 4
+                                              : cc.maxHeight / 5,
+                                          bottom: visible
+                                              ? cc.maxHeight / 4
+                                              : cc.maxHeight / 5,
+                                          left: 100,
+                                          right: 100,
+                                          child: GestureDetector(
                                             behavior:
                                                 HitTestBehavior.translucent,
-                                            onVerticalDragEnd:
-                                                (dragEndDetails) async {
-                                              if (dragEndDetails
-                                                      .primaryVelocity! >
-                                                  0) {
-                                                showSavedWords(
-                                                    context, book.filePath);
-                                              }
-                                            },
                                             onTap: () {
                                               setState(() {
                                                 visible = !visible;
@@ -2477,141 +2506,53 @@ class Reader extends State with WidgetsBindingObserver {
                                               } else {
                                                 SystemChrome
                                                     .setEnabledSystemUIMode(
-                                                        SystemUiMode.immersive);
+                                                        SystemUiMode.manual,
+                                                        overlays: []);
                                               }
-                                            }))
-                                    : Positioned(
-                                        top: visible
-                                            ? cc.maxHeight / 4
-                                            : cc.maxHeight / 5,
-                                        bottom: visible
-                                            ? cc.maxHeight / 4
-                                            : cc.maxHeight / 5,
-                                        left: 100,
-                                        right: 100,
-                                        child: GestureDetector(
-                                          behavior: HitTestBehavior.translucent,
-                                          onTap: () {
-                                            setState(() {
-                                              visible = !visible;
-                                            });
-                                            if (visible) {
-                                              SystemChrome
-                                                  .setEnabledSystemUIMode(
-                                                SystemUiMode.manual,
-                                                overlays: [
-                                                  SystemUiOverlay.top,
-                                                  SystemUiOverlay.bottom,
-                                                ],
-                                              );
-                                            } else {
-                                              SystemChrome
-                                                  .setEnabledSystemUIMode(
-                                                      SystemUiMode.manual,
-                                                      overlays: []);
-                                            }
-                                          },
-                                        ),
-                                      ),
-                              ]);
-                            }),
-                          ),
-                        ],
-                      )),
-                  bottomNavigationBar: Platform.isIOS
-                      ? BottomAppBar(
-                          height: !visible ? 42 : 110,
-                          color: visible
-                              ? Theme.of(context).colorScheme.primary
-                              : backgroundColor,
-                          child: Stack(
-                            children: [
-                              AnimatedContainer(
-                                duration: const Duration(milliseconds: 250),
-                                height: visible ? 42 : 110,
-                                child: Row(
-                                  mainAxisAlignment: MainAxisAlignment.end,
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: !visible
-                                      ? [
-                                          Padding(
-                                            padding: const EdgeInsets.fromLTRB(
-                                                10, 0, 0, 0),
-                                            child: Container(
-                                              width: MediaQuery.of(context)
-                                                      .size
-                                                      .width /
-                                                  8,
-                                              alignment: Alignment.topLeft,
-                                              child: Stack(
-                                                alignment: Alignment.centerLeft,
-                                                children: [
-                                                  Transform.rotate(
-                                                    angle:
-                                                        90 * 3.14159265 / 180,
-                                                    child: Icon(
-                                                      Icons.battery_full,
-                                                      color: themeProvider
-                                                              .isDarkTheme
-                                                          ? backgroundColor
-                                                                      .value ==
-                                                                  0xff1d1d21
-                                                              ? MyColors.white
-                                                              : MyColors.black
-                                                          : backgroundColor
-                                                                      .value !=
-                                                                  0xff1d1d21
-                                                              ? MyColors.black
-                                                              : MyColors.white,
-                                                      size: 28,
-                                                    ),
-                                                  ),
-                                                  Text(
-                                                    _batteryLevel.toInt() >= 100
-                                                        ? '${_batteryLevel.toString()}%'
-                                                        : ' ${_batteryLevel.toString()}%',
-                                                    style: TextStyle(
-                                                      color: themeProvider
-                                                              .isDarkTheme
-                                                          ? backgroundColor
-                                                                      .value ==
-                                                                  0xff1d1d21
-                                                              ? MyColors.black
-                                                              : MyColors.white
-                                                          : backgroundColor
-                                                                      .value !=
-                                                                  0xff1d1d21
-                                                              ? MyColors.white
-                                                              : MyColors.black,
-                                                      fontSize: 7,
-                                                      fontFamily: 'Tektur',
-                                                      fontWeight:
-                                                          FontWeight.bold,
-                                                    ),
-                                                    textAlign: TextAlign.center,
-                                                  ),
-                                                ],
-                                              ),
-                                            ),
+                                            },
                                           ),
-                                          Expanded(
-                                            child: Padding(
+                                        ),
+                                ]);
+                              }),
+                            ),
+                          ],
+                        )),
+                    bottomNavigationBar: Platform.isIOS
+                        ? BottomAppBar(
+                            height: !visible ? 42 : 110,
+                            color: visible
+                                ? Theme.of(context).colorScheme.primary
+                                : backgroundColor,
+                            child: Stack(
+                              children: [
+                                AnimatedContainer(
+                                  duration: const Duration(milliseconds: 250),
+                                  height: visible ? 42 : 110,
+                                  child: Row(
+                                    mainAxisAlignment: MainAxisAlignment.end,
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: !visible
+                                        ? [
+                                            Padding(
                                               padding:
                                                   const EdgeInsets.fromLTRB(
-                                                      0, 3, 0, 0),
-                                              child: Align(
-                                                alignment: Alignment.topCenter,
-                                                child: SingleChildScrollView(
-                                                  scrollDirection:
-                                                      Axis.horizontal,
-                                                  child: Text(
-                                                    book.customTitle
-                                                                .isNotEmpty &&
-                                                            book.author
-                                                                .isNotEmpty
-                                                        ? '${book.author.toString()}. ${book.customTitle.toString()}'
-                                                        : 'Нет названия',
-                                                    style: TextStyle(
+                                                      10, 0, 0, 0),
+                                              child: Container(
+                                                width: MediaQuery.of(context)
+                                                        .size
+                                                        .width /
+                                                    8,
+                                                alignment: Alignment.topLeft,
+                                                child: Stack(
+                                                  alignment:
+                                                      Alignment.centerLeft,
+                                                  children: [
+                                                    Transform.rotate(
+                                                      angle:
+                                                          90 * 3.14159265 / 180,
+                                                      child: Icon(
+                                                        Icons.battery_full,
                                                         color: themeProvider
                                                                 .isDarkTheme
                                                             ? backgroundColor
@@ -2625,247 +2566,296 @@ class Reader extends State with WidgetsBindingObserver {
                                                                 ? MyColors.black
                                                                 : MyColors
                                                                     .white,
+                                                        size: 28,
+                                                      ),
+                                                    ),
+                                                    Text(
+                                                      _batteryLevel.toInt() >=
+                                                              100
+                                                          ? '${_batteryLevel.toString()}%'
+                                                          : ' ${_batteryLevel.toString()}%',
+                                                      style: TextStyle(
+                                                        color: themeProvider
+                                                                .isDarkTheme
+                                                            ? backgroundColor
+                                                                        .value ==
+                                                                    0xff1d1d21
+                                                                ? MyColors.black
+                                                                : MyColors.white
+                                                            : backgroundColor
+                                                                        .value !=
+                                                                    0xff1d1d21
+                                                                ? MyColors.white
+                                                                : MyColors
+                                                                    .black,
+                                                        fontSize: 7,
                                                         fontFamily: 'Tektur',
-                                                        fontSize: 11,
                                                         fontWeight:
-                                                            FontWeight.bold),
-                                                    textAlign: TextAlign.center,
-                                                    overflow:
-                                                        TextOverflow.visible,
-                                                  ),
+                                                            FontWeight.bold,
+                                                      ),
+                                                      textAlign:
+                                                          TextAlign.center,
+                                                    ),
+                                                  ],
                                                 ),
                                               ),
                                             ),
-                                          ),
-                                          Padding(
-                                            padding: const EdgeInsets.fromLTRB(
-                                                0, 3, 10, 0),
-                                            child: Container(
-                                              width: MediaQuery.of(context)
-                                                      .size
-                                                      .width /
-                                                  8,
-                                              alignment: Alignment.topRight,
-                                              child: Text(
-                                                '${100}%',
-                                                style: TextStyle(
-                                                    color: themeProvider
-                                                            .isDarkTheme
-                                                        ? backgroundColor
-                                                                    .value ==
-                                                                0xff1d1d21
-                                                            ? MyColors.white
-                                                            : MyColors.black
-                                                        : backgroundColor
-                                                                    .value !=
-                                                                0xff1d1d21
-                                                            ? MyColors.black
-                                                            : MyColors.white,
-                                                    fontFamily: 'Tektur',
-                                                    fontSize: 11,
-                                                    fontWeight:
-                                                        FontWeight.bold),
-                                              ),
-                                            ),
-                                          ),
-                                        ]
-                                      : [],
-                                ),
-                              ),
-                              Positioned(
-                                bottom: 0,
-                                left: 0,
-                                right: 0,
-                                child: AnimatedContainer(
-                                    duration: const Duration(milliseconds: 250),
-                                    height: visible ? 85 : 0,
-                                    child: SingleChildScrollView(
-                                      child: Container(
-                                          alignment:
-                                              AlignmentDirectional.topEnd,
-                                          color: Theme.of(context)
-                                              .colorScheme
-                                              .primary,
-                                          child: Column(
-                                            children: [
-                                              Showcase(
-                                                  key: _six,
-                                                  disableMovingAnimation: true,
-                                                  onToolTipClick: () {
-                                                    ShowCaseWidget.of(context)
-                                                        .completed(_six);
-                                                  },
-                                                  description:
-                                                      "Ползунок прокрутки страниц.",
-                                                  child: SliderTheme(
-                                                    data: const SliderThemeData(
-                                                        showValueIndicator:
-                                                            ShowValueIndicator
-                                                                .always),
-                                                    child: Row(
-                                                      mainAxisAlignment:
-                                                          MainAxisAlignment
-                                                              .spaceEvenly,
-                                                      children: [
-                                                        Flexible(
-                                                            child: SliderTheme(
-                                                          data: const SliderThemeData(
-                                                              trackHeight: 3,
-                                                              thumbShape:
-                                                                  RoundSliderThumbShape(
-                                                                      enabledThumbRadius:
-                                                                          9),
-                                                              trackShape:
-                                                                  RectangularSliderTrackShape()),
-                                                          child: Container(
-                                                            width: orientations[
-                                                                            currentOrientationIndex] ==
-                                                                        DeviceOrientation
-                                                                            .landscapeLeft ||
-                                                                    orientations[
-                                                                            currentOrientationIndex] ==
-                                                                        DeviceOrientation
-                                                                            .landscapeRight
-                                                                ? MediaQuery.of(
-                                                                            context)
-                                                                        .size
-                                                                        .width /
-                                                                    1.19
-                                                                : MediaQuery.of(
-                                                                            context)
-                                                                        .size
-                                                                        .width /
-                                                                    1.12,
-                                                            child: Slider(
-                                                              value: percentage,
-                                                              min: 0,
-                                                              max: 100,
-                                                              label:
-                                                                  "$percentage%",
-                                                              onChanged:
-                                                                  (value) {
-                                                                setState(() {
-                                                                  percentage =
-                                                                      value;
-                                                                });
-                                                                if (_actionTimer
-                                                                        ?.isActive ??
-                                                                    false) {
-                                                                  _actionTimer
-                                                                      ?.cancel();
-                                                                }
-                                                                _actionTimer = Timer(
-                                                                    const Duration(
-                                                                        milliseconds:
-                                                                            250),
-                                                                    () {
-                                                                  /*TODO jumpTo(
-                                                                          value);*/
-                                                                });
-                                                              },
-                                                              onChangeEnd:
-                                                                  (value) {
-                                                                _actionTimer
-                                                                    ?.cancel();
-                                                                /*TODO if (value !=
-                                                                        _scrollController
-                                                                            .position
-                                                                            .pixels) {
-                                                                      jumpTo(
-                                                                          value);
-                                                                    }*/
-                                                              },
-                                                              activeColor: themeProvider
-                                                                      .isDarkTheme
-                                                                  ? MyColors
-                                                                      .white
-                                                                  : const Color
-                                                                      .fromRGBO(
-                                                                      29,
-                                                                      29,
-                                                                      33,
-                                                                      1),
-                                                              inactiveColor: themeProvider
-                                                                      .isDarkTheme
-                                                                  ? const Color
-                                                                      .fromRGBO(
-                                                                      96,
-                                                                      96,
-                                                                      96,
-                                                                      1)
-                                                                  : const Color
-                                                                      .fromRGBO(
-                                                                      96,
-                                                                      96,
-                                                                      96,
-                                                                      1),
-                                                              thumbColor: themeProvider
-                                                                      .isDarkTheme
-                                                                  ? MyColors
-                                                                      .white
-                                                                  : const Color
-                                                                      .fromRGBO(
-                                                                      29,
-                                                                      29,
-                                                                      33,
-                                                                      1),
-                                                            ),
-                                                          ),
-                                                        )),
-                                                        Container(
-                                                          width: MediaQuery.of(
-                                                                      context)
-                                                                  .size
-                                                                  .width /
-                                                              11,
-                                                          alignment:
-                                                              Alignment.center,
-                                                          child: Text11(
-                                                              text:
-                                                                  "${percentage}%",
-                                                              textColor: MyColors
-                                                                  .darkGray),
-                                                        )
-                                                      ],
-                                                    ),
-                                                  )),
-                                              Padding(
+                                            Expanded(
+                                              child: Padding(
                                                 padding:
                                                     const EdgeInsets.fromLTRB(
-                                                        0, 0, 0, 8),
-                                                child: SizedBox(
-                                                  width: MediaQuery.of(context)
-                                                      .size
-                                                      .width,
-                                                  height: 2,
-                                                  child: Container(
-                                                    color: themeProvider
-                                                            .isDarkTheme
-                                                        ? MyColors.darkGray
-                                                        : MyColors.black,
+                                                        0, 3, 0, 0),
+                                                child: Align(
+                                                  alignment:
+                                                      Alignment.topCenter,
+                                                  child: SingleChildScrollView(
+                                                    scrollDirection:
+                                                        Axis.horizontal,
+                                                    child: Text(
+                                                      book.customTitle
+                                                                  .isNotEmpty &&
+                                                              book.author
+                                                                  .isNotEmpty
+                                                          ? '${book.author.toString()}. ${book.customTitle.toString()}'
+                                                          : 'Нет названия',
+                                                      style: TextStyle(
+                                                          color: themeProvider
+                                                                  .isDarkTheme
+                                                              ? backgroundColor
+                                                                          .value ==
+                                                                      0xff1d1d21
+                                                                  ? MyColors
+                                                                      .white
+                                                                  : MyColors
+                                                                      .black
+                                                              : backgroundColor
+                                                                          .value !=
+                                                                      0xff1d1d21
+                                                                  ? MyColors
+                                                                      .black
+                                                                  : MyColors
+                                                                      .white,
+                                                          fontFamily: 'Tektur',
+                                                          fontSize: 11,
+                                                          fontWeight:
+                                                              FontWeight.bold),
+                                                      textAlign:
+                                                          TextAlign.center,
+                                                      overflow:
+                                                          TextOverflow.visible,
+                                                    ),
                                                   ),
                                                 ),
                                               ),
-                                              Row(
-                                                mainAxisAlignment:
-                                                    MainAxisAlignment.center,
-                                                children: [
-                                                  GestureDetector(
-                                                    onTap: () async {
-                                                      await switchOrientation();
-                                                    },
-                                                    child: Showcase(
-                                                        key: _seven,
-                                                        disableMovingAnimation:
-                                                            true,
-                                                        onToolTipClick: () {
-                                                          ShowCaseWidget.of(
-                                                                  context)
-                                                              .completed(
-                                                                  _seven);
+                                            ),
+                                            Padding(
+                                              padding:
+                                                  const EdgeInsets.fromLTRB(
+                                                      0, 3, 10, 0),
+                                              child: Container(
+                                                width: MediaQuery.of(context)
+                                                        .size
+                                                        .width /
+                                                    8,
+                                                alignment: Alignment.topRight,
+                                                child: Text(
+                                                  '${100}%',
+                                                  style: TextStyle(
+                                                      color: themeProvider
+                                                              .isDarkTheme
+                                                          ? backgroundColor
+                                                                      .value ==
+                                                                  0xff1d1d21
+                                                              ? MyColors.white
+                                                              : MyColors.black
+                                                          : backgroundColor
+                                                                      .value !=
+                                                                  0xff1d1d21
+                                                              ? MyColors.black
+                                                              : MyColors.white,
+                                                      fontFamily: 'Tektur',
+                                                      fontSize: 11,
+                                                      fontWeight:
+                                                          FontWeight.bold),
+                                                ),
+                                              ),
+                                            ),
+                                          ]
+                                        : [],
+                                  ),
+                                ),
+                                Positioned(
+                                  bottom: 0,
+                                  left: 0,
+                                  right: 0,
+                                  child: AnimatedContainer(
+                                      duration:
+                                          const Duration(milliseconds: 250),
+                                      height: visible ? 85 : 0,
+                                      child: SingleChildScrollView(
+                                        child: Container(
+                                            alignment:
+                                                AlignmentDirectional.topEnd,
+                                            color: Theme.of(context)
+                                                .colorScheme
+                                                .primary,
+                                            child: Column(
+                                              children: [
+                                                SliderTheme(
+                                                  data: const SliderThemeData(
+                                                      showValueIndicator:
+                                                          ShowValueIndicator
+                                                              .always),
+                                                  child: Row(
+                                                    mainAxisAlignment:
+                                                        MainAxisAlignment
+                                                            .spaceEvenly,
+                                                    children: [
+                                                      Flexible(
+                                                          child: SliderTheme(
+                                                        data: const SliderThemeData(
+                                                            trackHeight: 3,
+                                                            thumbShape:
+                                                                RoundSliderThumbShape(
+                                                                    enabledThumbRadius:
+                                                                        9),
+                                                            trackShape:
+                                                                RectangularSliderTrackShape()),
+                                                        child: Container(
+                                                          width: orientations[
+                                                                          currentOrientationIndex] ==
+                                                                      DeviceOrientation
+                                                                          .landscapeLeft ||
+                                                                  orientations[
+                                                                          currentOrientationIndex] ==
+                                                                      DeviceOrientation
+                                                                          .landscapeRight
+                                                              ? MediaQuery.of(
+                                                                          context)
+                                                                      .size
+                                                                      .width /
+                                                                  1.19
+                                                              : MediaQuery.of(
+                                                                          context)
+                                                                      .size
+                                                                      .width /
+                                                                  1.12,
+                                                          child: Slider(
+                                                            value: percentage,
+                                                            min: 0,
+                                                            max: 100,
+                                                            label:
+                                                                "$percentage%",
+                                                            onChanged: (value) {
+                                                              setState(() {
+                                                                percentage =
+                                                                    value;
+                                                              });
+                                                              if (_actionTimer
+                                                                      ?.isActive ??
+                                                                  false) {
+                                                                _actionTimer
+                                                                    ?.cancel();
+                                                              }
+                                                              _actionTimer = Timer(
+                                                                  const Duration(
+                                                                      milliseconds:
+                                                                          250),
+                                                                  () {
+                                                                /*TODO jumpTo(
+                                                                              value);*/
+                                                              });
+                                                            },
+                                                            onChangeEnd:
+                                                                (value) {
+                                                              _actionTimer
+                                                                  ?.cancel();
+                                                              /*TODO if (value !=
+                                                                            _scrollController
+                                                                                .position
+                                                                                .pixels) {
+                                                                          jumpTo(
+                                                                              value);
+                                                                        }*/
+                                                            },
+                                                            activeColor: themeProvider
+                                                                    .isDarkTheme
+                                                                ? MyColors.white
+                                                                : const Color
+                                                                    .fromRGBO(
+                                                                    29,
+                                                                    29,
+                                                                    33,
+                                                                    1),
+                                                            inactiveColor: themeProvider
+                                                                    .isDarkTheme
+                                                                ? const Color
+                                                                    .fromRGBO(
+                                                                    96,
+                                                                    96,
+                                                                    96,
+                                                                    1)
+                                                                : const Color
+                                                                    .fromRGBO(
+                                                                    96,
+                                                                    96,
+                                                                    96,
+                                                                    1),
+                                                            thumbColor: themeProvider
+                                                                    .isDarkTheme
+                                                                ? MyColors.white
+                                                                : const Color
+                                                                    .fromRGBO(
+                                                                    29,
+                                                                    29,
+                                                                    33,
+                                                                    1),
+                                                          ),
+                                                        ),
+                                                      )),
+                                                      Container(
+                                                        width: MediaQuery.of(
+                                                                    context)
+                                                                .size
+                                                                .width /
+                                                            11,
+                                                        alignment:
+                                                            Alignment.center,
+                                                        child: Text11(
+                                                            text:
+                                                                "$percentage%",
+                                                            textColor: MyColors
+                                                                .darkGray),
+                                                      )
+                                                    ],
+                                                  ),
+                                                ),
+                                                Padding(
+                                                  padding:
+                                                      const EdgeInsets.fromLTRB(
+                                                          0, 0, 0, 8),
+                                                  child: SizedBox(
+                                                    width:
+                                                        MediaQuery.of(context)
+                                                            .size
+                                                            .width,
+                                                    height: 2,
+                                                    child: Container(
+                                                      color: themeProvider
+                                                              .isDarkTheme
+                                                          ? MyColors.darkGray
+                                                          : MyColors.black,
+                                                    ),
+                                                  ),
+                                                ),
+                                                Row(
+                                                  mainAxisAlignment:
+                                                      MainAxisAlignment.center,
+                                                  children: [
+                                                    GestureDetector(
+                                                        onTap: () async {
+                                                          await switchOrientation();
                                                         },
-                                                        description:
-                                                            "В нижнем колонтитуле иконка поворота текста на 90°  каждым нажатием на кнопку.",
                                                         child: Icon(
                                                           CustomIcons.turn,
                                                           color:
@@ -2874,36 +2864,25 @@ class Reader extends State with WidgetsBindingObserver {
                                                                   .color,
                                                           size: 27,
                                                         )),
-                                                  ),
-                                                  const Padding(
-                                                      padding: EdgeInsets.only(
-                                                          right: 30)),
-                                                  InkWell(
-                                                    onTap: () async {
-                                                      final themeProvider =
-                                                          Provider.of<
-                                                                  ThemeProvider>(
-                                                              context,
-                                                              listen: false);
-                                                      themeProvider
-                                                              .isDarkTheme =
-                                                          !themeProvider
-                                                              .isDarkTheme;
-                                                      await saveSettings(
+                                                    const Padding(
+                                                        padding:
+                                                            EdgeInsets.only(
+                                                                right: 30)),
+                                                    InkWell(
+                                                        onTap: () async {
+                                                          final themeProvider =
+                                                              Provider.of<
+                                                                      ThemeProvider>(
+                                                                  context,
+                                                                  listen:
+                                                                      false);
                                                           themeProvider
-                                                              .isDarkTheme);
-                                                    },
-                                                    child: Showcase(
-                                                        key: _eight,
-                                                        description:
-                                                            "Иконка переключения режима «день/ночь»",
-                                                        disableMovingAnimation:
-                                                            true,
-                                                        onToolTipClick: () {
-                                                          ShowCaseWidget.of(
-                                                                  context)
-                                                              .completed(
-                                                                  _eight);
+                                                                  .isDarkTheme =
+                                                              !themeProvider
+                                                                  .isDarkTheme;
+                                                          await saveSettings(
+                                                              themeProvider
+                                                                  .isDarkTheme);
                                                         },
                                                         child: Icon(
                                                           CustomIcons.theme,
@@ -2913,24 +2892,13 @@ class Reader extends State with WidgetsBindingObserver {
                                                                   .color,
                                                           size: 27,
                                                         )),
-                                                  ),
-                                                  const Padding(
-                                                      padding: EdgeInsets.only(
-                                                          right: 30)),
-                                                  GestureDetector(
-                                                    onTap: () async {
-                                                      toggleWordMode();
-                                                    },
-                                                    child: Showcase(
-                                                        key: _nine,
-                                                        disableMovingAnimation:
-                                                            true,
-                                                        description:
-                                                            "Иконка входа в режим «Слово» 👌",
-                                                        onToolTipClick: () {
-                                                          ShowCaseWidget.of(
-                                                                  context)
-                                                              .completed(_nine);
+                                                    const Padding(
+                                                        padding:
+                                                            EdgeInsets.only(
+                                                                right: 30)),
+                                                    GestureDetector(
+                                                        onTap: () async {
+                                                          toggleWordMode();
                                                         },
                                                         child: Column(
                                                           children: [
@@ -2945,109 +2913,50 @@ class Reader extends State with WidgetsBindingObserver {
                                                             const Text('Слово')
                                                           ],
                                                         )),
-                                                  )
-                                                ],
-                                              )
-                                            ],
-                                          )),
-                                    )),
-                              )
-                            ],
-                          ),
-                        )
-                      : BottomAppBar(
-                          color: visible
-                              ? Theme.of(context).colorScheme.primary
-                              : backgroundColor,
-                          height: visible ? 107 : 45,
-                          child: Stack(
-                            children: [
-                              AnimatedContainer(
-                                duration: const Duration(milliseconds: 250),
-                                height: visible ? 110 : 40,
-                                child: Row(
-                                  mainAxisAlignment: MainAxisAlignment.end,
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: !visible
-                                      ? [
-                                          Padding(
-                                            padding: const EdgeInsets.fromLTRB(
-                                                0, 0, 0, 0),
-                                            child: Container(
-                                              width: MediaQuery.of(context)
-                                                      .size
-                                                      .width /
-                                                  8,
-                                              alignment: Alignment.topLeft,
-                                              child: Stack(
-                                                alignment: Alignment.centerLeft,
-                                                children: [
-                                                  Transform.rotate(
-                                                    angle:
-                                                        90 * 3.14159265 / 180,
-                                                    child: Icon(
-                                                      Icons.battery_full,
-                                                      color: themeProvider
-                                                              .isDarkTheme
-                                                          ? backgroundColor
-                                                                      .value ==
-                                                                  0xff1d1d21
-                                                              ? MyColors.white
-                                                              : MyColors.black
-                                                          : backgroundColor
-                                                                      .value !=
-                                                                  0xff1d1d21
-                                                              ? MyColors.black
-                                                              : MyColors.white,
-                                                      size: 28,
-                                                    ),
-                                                  ),
-                                                  Text(
-                                                    _batteryLevel.toInt() >= 100
-                                                        ? '${_batteryLevel.toString()}%'
-                                                        : ' ${_batteryLevel.toString()}%',
-                                                    style: TextStyle(
-                                                      color: themeProvider
-                                                              .isDarkTheme
-                                                          ? backgroundColor
-                                                                      .value ==
-                                                                  0xff1d1d21
-                                                              ? MyColors.black
-                                                              : MyColors.white
-                                                          : backgroundColor
-                                                                      .value !=
-                                                                  0xff1d1d21
-                                                              ? MyColors.white
-                                                              : MyColors.black,
-                                                      fontSize: 7,
-                                                      fontFamily: 'Tektur',
-                                                      fontWeight:
-                                                          FontWeight.bold,
-                                                    ),
-                                                    textAlign: TextAlign.center,
-                                                  ),
-                                                ],
-                                              ),
-                                            ),
-                                          ),
-                                          Expanded(
-                                            child: Padding(
+                                                  ],
+                                                )
+                                              ],
+                                            )),
+                                      )),
+                                )
+                              ],
+                            ),
+                          )
+                        : BottomAppBar(
+                            color: visible
+                                ? Theme.of(context).colorScheme.primary
+                                : backgroundColor,
+                            height: visible ? 107 : 45,
+                            child: Stack(
+                              children: [
+                                AnimatedContainer(
+                                  duration: const Duration(milliseconds: 250),
+                                  height: visible ? 110 : 40,
+                                  child: Row(
+                                    mainAxisAlignment: MainAxisAlignment.end,
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: !visible
+                                        ? [
+                                            Padding(
                                               padding:
                                                   const EdgeInsets.fromLTRB(
-                                                      0, 3, 0, 0),
-                                              child: Align(
-                                                alignment: Alignment.topCenter,
-                                                child: SingleChildScrollView(
-                                                  scrollDirection:
-                                                      Axis.horizontal,
-                                                  child: Text(
-                                                    book.customTitle
-                                                                .isNotEmpty &&
-                                                            book.author
-                                                                .isNotEmpty
-                                                        ? '${book.author.toString()}. ${book.customTitle.toString()}'
-                                                        : 'Нет названия',
-                                                    style: TextStyle(
+                                                      0, 0, 0, 0),
+                                              child: Container(
+                                                width: MediaQuery.of(context)
+                                                        .size
+                                                        .width /
+                                                    8,
+                                                alignment: Alignment.topLeft,
+                                                child: Stack(
+                                                  alignment:
+                                                      Alignment.centerLeft,
+                                                  children: [
+                                                    Transform.rotate(
+                                                      angle:
+                                                          90 * 3.14159265 / 180,
+                                                      child: Icon(
+                                                        Icons.battery_full,
                                                         color: themeProvider
                                                                 .isDarkTheme
                                                             ? backgroundColor
@@ -3061,223 +2970,272 @@ class Reader extends State with WidgetsBindingObserver {
                                                                 ? MyColors.black
                                                                 : MyColors
                                                                     .white,
+                                                        size: 28,
+                                                      ),
+                                                    ),
+                                                    Text(
+                                                      _batteryLevel.toInt() >=
+                                                              100
+                                                          ? '${_batteryLevel.toString()}%'
+                                                          : ' ${_batteryLevel.toString()}%',
+                                                      style: TextStyle(
+                                                        color: themeProvider
+                                                                .isDarkTheme
+                                                            ? backgroundColor
+                                                                        .value ==
+                                                                    0xff1d1d21
+                                                                ? MyColors.black
+                                                                : MyColors.white
+                                                            : backgroundColor
+                                                                        .value !=
+                                                                    0xff1d1d21
+                                                                ? MyColors.white
+                                                                : MyColors
+                                                                    .black,
+                                                        fontSize: 7,
                                                         fontFamily: 'Tektur',
-                                                        fontSize: 11,
                                                         fontWeight:
-                                                            FontWeight.bold),
-                                                    textAlign: TextAlign.center,
-                                                    overflow:
-                                                        TextOverflow.visible,
-                                                  ),
+                                                            FontWeight.bold,
+                                                      ),
+                                                      textAlign:
+                                                          TextAlign.center,
+                                                    ),
+                                                  ],
                                                 ),
                                               ),
                                             ),
-                                          ),
-                                          Padding(
-                                            padding: const EdgeInsets.fromLTRB(
-                                                0, 3, 10, 0),
-                                            child: Container(
-                                              width: MediaQuery.of(context)
-                                                      .size
-                                                      .width /
-                                                  8,
-                                              alignment: Alignment.topRight,
-                                              child: Text(
-                                                '${percentage.toStringAsFixed(1)}%',
-                                                style: TextStyle(
-                                                    color: themeProvider
-                                                            .isDarkTheme
-                                                        ? backgroundColor
-                                                                    .value ==
-                                                                0xff1d1d21
-                                                            ? MyColors.white
-                                                            : MyColors.black
-                                                        : backgroundColor
-                                                                    .value !=
-                                                                0xff1d1d21
-                                                            ? MyColors.black
-                                                            : MyColors.white,
-                                                    fontFamily: 'Tektur',
-                                                    fontSize: 11,
-                                                    fontWeight:
-                                                        FontWeight.bold),
-                                              ),
-                                            ),
-                                          ),
-                                        ]
-                                      : [],
-                                ),
-                              ),
-                              Positioned(
-                                bottom: 0,
-                                left: 0,
-                                right: 0,
-                                child: AnimatedContainer(
-                                    duration: const Duration(milliseconds: 250),
-                                    height: visible ? 97 : 0,
-                                    child: SingleChildScrollView(
-                                      child: Container(
-                                          alignment:
-                                              AlignmentDirectional.topEnd,
-                                          color: Theme.of(context)
-                                              .colorScheme
-                                              .primary,
-                                          child: Column(
-                                            children: [
-                                              Showcase(
-                                                  key: _six,
-                                                  disableMovingAnimation: true,
-                                                  onToolTipClick: () {
-                                                    ShowCaseWidget.of(context)
-                                                        .completed(_six);
-                                                  },
-                                                  description:
-                                                      "Ползунок прокрутки страниц.",
-                                                  child: SliderTheme(
-                                                    data: const SliderThemeData(
-                                                        showValueIndicator:
-                                                            ShowValueIndicator
-                                                                .always),
-                                                    child: Row(
-                                                      mainAxisAlignment:
-                                                          MainAxisAlignment
-                                                              .spaceEvenly,
-                                                      children: [
-                                                        Flexible(
-                                                            child: SliderTheme(
-                                                          data: const SliderThemeData(
-                                                              trackHeight: 3,
-                                                              thumbShape:
-                                                                  RoundSliderThumbShape(
-                                                                      enabledThumbRadius:
-                                                                          9),
-                                                              trackShape:
-                                                                  RectangularSliderTrackShape()),
-                                                          child: Container(
-                                                            width: orientations[
-                                                                            currentOrientationIndex] ==
-                                                                        DeviceOrientation
-                                                                            .landscapeLeft ||
-                                                                    orientations[
-                                                                            currentOrientationIndex] ==
-                                                                        DeviceOrientation
-                                                                            .landscapeRight
-                                                                ? MediaQuery.of(
-                                                                            context)
-                                                                        .size
-                                                                        .width /
-                                                                    1.19
-                                                                : MediaQuery.of(
-                                                                            context)
-                                                                        .size
-                                                                        .width /
-                                                                    1.12,
-                                                            child: Slider(
-                                                              value: percentage,
-                                                              min: 0,
-                                                              max: 100,
-                                                              label:
-                                                                  "${percentage.toStringAsFixed(1)}%",
-                                                              onChanged:
-                                                                  (value) {
-                                                                jumpToPercent(
-                                                                    value);
-                                                                setState(() {
-                                                                  percentage =
-                                                                      value;
-                                                                });
-                                                              },
-                                                              activeColor: themeProvider
-                                                                      .isDarkTheme
-                                                                  ? MyColors
-                                                                      .white
-                                                                  : const Color
-                                                                      .fromRGBO(
-                                                                      29,
-                                                                      29,
-                                                                      33,
-                                                                      1),
-                                                              inactiveColor: themeProvider
-                                                                      .isDarkTheme
-                                                                  ? const Color
-                                                                      .fromRGBO(
-                                                                      96,
-                                                                      96,
-                                                                      96,
-                                                                      1)
-                                                                  : const Color
-                                                                      .fromRGBO(
-                                                                      96,
-                                                                      96,
-                                                                      96,
-                                                                      1),
-                                                              thumbColor: themeProvider
-                                                                      .isDarkTheme
-                                                                  ? MyColors
-                                                                      .white
-                                                                  : const Color
-                                                                      .fromRGBO(
-                                                                      29,
-                                                                      29,
-                                                                      33,
-                                                                      1),
-                                                            ),
-                                                          ),
-                                                        )),
-                                                        Container(
-                                                          width: MediaQuery.of(
-                                                                      context)
-                                                                  .size
-                                                                  .width /
-                                                              11,
-                                                          alignment:
-                                                              Alignment.center,
-                                                          child: Text11(
-                                                              text:
-                                                                  "${percentage.toStringAsFixed(1)}%",
-                                                              textColor: MyColors
-                                                                  .darkGray),
-                                                        )
-                                                      ],
-                                                    ),
-                                                  )),
-                                              Padding(
+                                            Expanded(
+                                              child: Padding(
                                                 padding:
                                                     const EdgeInsets.fromLTRB(
-                                                        0, 0, 0, 8),
-                                                child: SizedBox(
-                                                  width: MediaQuery.of(context)
-                                                      .size
-                                                      .width,
-                                                  height: 2,
-                                                  child: Container(
-                                                    color: themeProvider
-                                                            .isDarkTheme
-                                                        ? MyColors.darkGray
-                                                        : MyColors.black,
+                                                        0, 3, 0, 0),
+                                                child: Align(
+                                                  alignment:
+                                                      Alignment.topCenter,
+                                                  child: SingleChildScrollView(
+                                                    scrollDirection:
+                                                        Axis.horizontal,
+                                                    child: Text(
+                                                      book.customTitle
+                                                                  .isNotEmpty &&
+                                                              book.author
+                                                                  .isNotEmpty
+                                                          ? '${book.author.toString()}. ${book.customTitle.toString()}'
+                                                          : 'Нет названия',
+                                                      style: TextStyle(
+                                                          color: themeProvider
+                                                                  .isDarkTheme
+                                                              ? backgroundColor
+                                                                          .value ==
+                                                                      0xff1d1d21
+                                                                  ? MyColors
+                                                                      .white
+                                                                  : MyColors
+                                                                      .black
+                                                              : backgroundColor
+                                                                          .value !=
+                                                                      0xff1d1d21
+                                                                  ? MyColors
+                                                                      .black
+                                                                  : MyColors
+                                                                      .white,
+                                                          fontFamily: 'Tektur',
+                                                          fontSize: 11,
+                                                          fontWeight:
+                                                              FontWeight.bold),
+                                                      textAlign:
+                                                          TextAlign.center,
+                                                      overflow:
+                                                          TextOverflow.visible,
+                                                    ),
                                                   ),
                                                 ),
                                               ),
-                                              Row(
-                                                mainAxisAlignment:
-                                                    MainAxisAlignment.center,
-                                                children: [
-                                                  GestureDetector(
-                                                    onTap: () async {
-                                                      await switchOrientation();
-                                                    },
-                                                    child: Showcase(
-                                                        key: _seven,
-                                                        disableMovingAnimation:
-                                                            true,
-                                                        onToolTipClick: () {
-                                                          ShowCaseWidget.of(
-                                                                  context)
-                                                              .completed(
-                                                                  _seven);
+                                            ),
+                                            Padding(
+                                              padding:
+                                                  const EdgeInsets.fromLTRB(
+                                                      0, 3, 10, 0),
+                                              child: Container(
+                                                width: MediaQuery.of(context)
+                                                        .size
+                                                        .width /
+                                                    8,
+                                                alignment: Alignment.topRight,
+                                                child: Text(
+                                                  '${percentage.toStringAsFixed(1)}%',
+                                                  style: TextStyle(
+                                                      color: themeProvider
+                                                              .isDarkTheme
+                                                          ? backgroundColor
+                                                                      .value ==
+                                                                  0xff1d1d21
+                                                              ? MyColors.white
+                                                              : MyColors.black
+                                                          : backgroundColor
+                                                                      .value !=
+                                                                  0xff1d1d21
+                                                              ? MyColors.black
+                                                              : MyColors.white,
+                                                      fontFamily: 'Tektur',
+                                                      fontSize: 11,
+                                                      fontWeight:
+                                                          FontWeight.bold),
+                                                ),
+                                              ),
+                                            ),
+                                          ]
+                                        : [],
+                                  ),
+                                ),
+                                Positioned(
+                                  bottom: 0,
+                                  left: 0,
+                                  right: 0,
+                                  child: AnimatedContainer(
+                                      duration:
+                                          const Duration(milliseconds: 250),
+                                      height: visible ? 97 : 0,
+                                      child: SingleChildScrollView(
+                                        child: Container(
+                                            alignment:
+                                                AlignmentDirectional.topEnd,
+                                            color: Theme.of(context)
+                                                .colorScheme
+                                                .primary,
+                                            child: Column(
+                                              children: [
+                                                SliderTheme(
+                                                  data: const SliderThemeData(
+                                                      showValueIndicator:
+                                                          ShowValueIndicator
+                                                              .always),
+                                                  child: Row(
+                                                    mainAxisAlignment:
+                                                        MainAxisAlignment
+                                                            .spaceEvenly,
+                                                    children: [
+                                                      Flexible(
+                                                          child: SliderTheme(
+                                                        data: const SliderThemeData(
+                                                            trackHeight: 3,
+                                                            thumbShape:
+                                                                RoundSliderThumbShape(
+                                                                    enabledThumbRadius:
+                                                                        9),
+                                                            trackShape:
+                                                                RectangularSliderTrackShape()),
+                                                        child: Container(
+                                                          width: orientations[
+                                                                          currentOrientationIndex] ==
+                                                                      DeviceOrientation
+                                                                          .landscapeLeft ||
+                                                                  orientations[
+                                                                          currentOrientationIndex] ==
+                                                                      DeviceOrientation
+                                                                          .landscapeRight
+                                                              ? MediaQuery.of(
+                                                                          context)
+                                                                      .size
+                                                                      .width /
+                                                                  1.19
+                                                              : MediaQuery.of(
+                                                                          context)
+                                                                      .size
+                                                                      .width /
+                                                                  1.12,
+                                                          child: Slider(
+                                                            value: percentage,
+                                                            min: 0,
+                                                            max: 100,
+                                                            label:
+                                                                "${percentage.toStringAsFixed(1)}%",
+                                                            onChanged: (value) {
+                                                              jumpToPercent(
+                                                                  value);
+                                                              setState(() {
+                                                                percentage =
+                                                                    value;
+                                                              });
+                                                            },
+                                                            activeColor: themeProvider
+                                                                    .isDarkTheme
+                                                                ? MyColors.white
+                                                                : const Color
+                                                                    .fromRGBO(
+                                                                    29,
+                                                                    29,
+                                                                    33,
+                                                                    1),
+                                                            inactiveColor: themeProvider
+                                                                    .isDarkTheme
+                                                                ? const Color
+                                                                    .fromRGBO(
+                                                                    96,
+                                                                    96,
+                                                                    96,
+                                                                    1)
+                                                                : const Color
+                                                                    .fromRGBO(
+                                                                    96,
+                                                                    96,
+                                                                    96,
+                                                                    1),
+                                                            thumbColor: themeProvider
+                                                                    .isDarkTheme
+                                                                ? MyColors.white
+                                                                : const Color
+                                                                    .fromRGBO(
+                                                                    29,
+                                                                    29,
+                                                                    33,
+                                                                    1),
+                                                          ),
+                                                        ),
+                                                      )),
+                                                      Container(
+                                                        width: MediaQuery.of(
+                                                                    context)
+                                                                .size
+                                                                .width /
+                                                            11,
+                                                        alignment:
+                                                            Alignment.center,
+                                                        child: Text11(
+                                                            text:
+                                                                "${percentage.toStringAsFixed(1)}%",
+                                                            textColor: MyColors
+                                                                .darkGray),
+                                                      )
+                                                    ],
+                                                  ),
+                                                ),
+                                                Padding(
+                                                  padding:
+                                                      const EdgeInsets.fromLTRB(
+                                                          0, 0, 0, 8),
+                                                  child: SizedBox(
+                                                    width:
+                                                        MediaQuery.of(context)
+                                                            .size
+                                                            .width,
+                                                    height: 2,
+                                                    child: Container(
+                                                      color: themeProvider
+                                                              .isDarkTheme
+                                                          ? MyColors.darkGray
+                                                          : MyColors.black,
+                                                    ),
+                                                  ),
+                                                ),
+                                                Row(
+                                                  mainAxisAlignment:
+                                                      MainAxisAlignment.center,
+                                                  children: [
+                                                    GestureDetector(
+                                                        onTap: () async {
+                                                          await switchOrientation();
                                                         },
-                                                        description:
-                                                            "В нижнем колонтитуле иконка поворота текста на 90°  каждым нажатием на кнопку.",
                                                         child: Column(
                                                           children: [
                                                             Icon(
@@ -3298,36 +3256,25 @@ class Reader extends State with WidgetsBindingObserver {
                                                                 ))
                                                           ],
                                                         )),
-                                                  ),
-                                                  const Padding(
-                                                      padding: EdgeInsets.only(
-                                                          right: 23)),
-                                                  InkWell(
-                                                    onTap: () async {
-                                                      final themeProvider =
-                                                          Provider.of<
-                                                                  ThemeProvider>(
-                                                              context,
-                                                              listen: false);
-                                                      themeProvider
-                                                              .isDarkTheme =
-                                                          !themeProvider
-                                                              .isDarkTheme;
-                                                      await saveSettings(
+                                                    const Padding(
+                                                        padding:
+                                                            EdgeInsets.only(
+                                                                right: 23)),
+                                                    InkWell(
+                                                        onTap: () async {
+                                                          final themeProvider =
+                                                              Provider.of<
+                                                                      ThemeProvider>(
+                                                                  context,
+                                                                  listen:
+                                                                      false);
                                                           themeProvider
-                                                              .isDarkTheme);
-                                                    },
-                                                    child: Showcase(
-                                                        key: _eight,
-                                                        description:
-                                                            "Иконка переключения режима «день/ночь»",
-                                                        disableMovingAnimation:
-                                                            true,
-                                                        onToolTipClick: () {
-                                                          ShowCaseWidget.of(
-                                                                  context)
-                                                              .completed(
-                                                                  _eight);
+                                                                  .isDarkTheme =
+                                                              !themeProvider
+                                                                  .isDarkTheme;
+                                                          await saveSettings(
+                                                              themeProvider
+                                                                  .isDarkTheme);
                                                         },
                                                         child:
                                                             Column(children: [
@@ -3348,58 +3295,47 @@ class Reader extends State with WidgetsBindingObserver {
                                                             ),
                                                           )
                                                         ])),
-                                                  ),
-                                                  const Padding(
-                                                      padding: EdgeInsets.only(
-                                                          right: 30)),
-                                                  GestureDetector(
-                                                    onTap: () {
-                                                      toggleWordMode();
-                                                    },
-                                                    child: Showcase(
-                                                        key: _nine,
-                                                        disableMovingAnimation:
-                                                            true,
-                                                        description:
-                                                            "Иконка входа в режим «Слово» 👌",
-                                                        onToolTipClick: () {
-                                                          ShowCaseWidget.of(
-                                                                  context)
-                                                              .completed(_nine);
-                                                        },
-                                                        child: Column(
-                                                          children: [
-                                                            Icon(
-                                                              CustomIcons.wm,
-                                                              color: Theme.of(
-                                                                      context)
-                                                                  .iconTheme
-                                                                  .color,
-                                                              size: 27,
-                                                            ),
-                                                            const Text('Слово',
-                                                                style:
-                                                                    TextStyle(
-                                                                  fontFamily:
-                                                                      'Tektur',
-                                                                  fontSize: 10,
-                                                                ))
-                                                          ],
-                                                        )),
-                                                  ),
-                                                  const Padding(
-                                                      padding: EdgeInsets.only(
-                                                          right: 10)),
-                                                ],
-                                              )
-                                            ],
-                                          )),
-                                    )),
-                              )
-                            ],
-                          )),
-                );
-              })
+                                                    const Padding(
+                                                        padding:
+                                                            EdgeInsets.only(
+                                                                right: 30)),
+                                                    GestureDetector(
+                                                      onTap: () {
+                                                        toggleWordMode();
+                                                      },
+                                                      child: Column(
+                                                        children: [
+                                                          Icon(
+                                                            CustomIcons.wm,
+                                                            color: Theme.of(
+                                                                    context)
+                                                                .iconTheme
+                                                                .color,
+                                                            size: 27,
+                                                          ),
+                                                          const Text('Слово',
+                                                              style: TextStyle(
+                                                                fontFamily:
+                                                                    'Tektur',
+                                                                fontSize: 10,
+                                                              ))
+                                                        ],
+                                                      ),
+                                                    ),
+                                                    const Padding(
+                                                        padding:
+                                                            EdgeInsets.only(
+                                                                right: 10)),
+                                                  ],
+                                                )
+                                              ],
+                                            )),
+                                      )),
+                                )
+                              ],
+                            )),
+                  );
+                })
             : Scaffold(
                 body: Container(
                   color: Theme.of(context).colorScheme.primary,

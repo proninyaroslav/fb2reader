@@ -1,20 +1,21 @@
-import 'dart:convert';
-import 'dart:io';
 import 'dart:ui';
 
+import 'package:dynamic_height_grid_view/dynamic_height_grid_view.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_svg/flutter_svg.dart';
-import 'package:merlin/UI/router.dart';
-import 'package:merlin/functions/book.dart';
-import 'package:merlin/style/text.dart';
-import 'package:merlin/style/colors.dart';
-import 'package:merlin/pages/recent/bookloader.dart';
-import 'package:path_provider/path_provider.dart';
-import 'package:shared_preferences/shared_preferences.dart';
-
-import 'package:dynamic_height_grid_view/dynamic_height_grid_view.dart';
 import 'package:fluttertoast/fluttertoast.dart';
+import 'package:merlin/UI/router.dart';
+import 'package:merlin/components/books_page_header.dart';
+import 'package:merlin/functions/book.dart';
+import 'package:merlin/pages/books/book_item.dart';
+import 'package:merlin/pages/recent/bookloader.dart';
+import 'package:merlin/pages/recent/books_recent_cubit.dart';
+import 'package:merlin/pages/recent/books_recent_state.dart';
+import 'package:merlin/style/colors.dart';
+import 'package:merlin/style/text.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 class RecentPage extends StatefulWidget {
   const RecentPage({super.key});
@@ -23,52 +24,18 @@ class RecentPage extends StatefulWidget {
   State<RecentPage> createState() => RecentPageState();
 }
 
-class ImageInfo {
-  Uint8List? imageBytes;
-  String title;
-  String author;
-  String fileName;
-  double progress;
-
-  ImageInfo(
-      {this.imageBytes,
-      required this.title,
-      required this.author,
-      required this.fileName,
-      required this.progress});
-
-  Map<String, dynamic> toJson() {
-    return {
-      'imageBytes': imageBytes,
-      'title': title,
-      'author': author,
-      'fileName': fileName,
-      'progress': progress,
-    };
-  }
-
-  factory ImageInfo.fromJson(Map<String, dynamic> json) {
-    return ImageInfo(
-      imageBytes: Uint8List.fromList(List<int>.from(json['imageBytes'])),
-      title: json['title'],
-      author: json['author'],
-      fileName: json['fileName'],
-      progress: json['progress']?.toDouble() ?? 0.0,
-    );
-  }
-}
-
 class RecentPageState extends State<RecentPage> {
-  final ImageLoader imageLoader = ImageLoader();
+  final BookLoader imageLoader = BookLoader();
   final ScrollController _scrollController = ScrollController();
   Uint8List? imageBytes;
   List<ImageInfo> images = [];
-  List<Book> books = [];
   String? firstName;
   String? lastName;
   String? name;
   String? title;
   bool _isOperationInProgress = false;
+  String? _searchQuery;
+  BooksSort _selectedSort = BooksSort.dateAddedDesc;
 
   @override
   void initState() {
@@ -80,18 +47,11 @@ class RecentPageState extends State<RecentPage> {
       ],
     );
 
-    super.initState();
-    _initData();
-  }
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      await _initData();
+    });
 
-  @override
-  void didChangeDependencies() {
-    // print("Start didChangeDependencies...");
-    super.didChangeDependencies();
-    // // updateFromJSON();
-    // print('ОЧИСТКА');
-    // updateFromJSON();
-    setState(() {});
+    super.initState();
   }
 
   @override
@@ -100,110 +60,18 @@ class RecentPageState extends State<RecentPage> {
     super.dispose();
   }
 
-  Future<void> updateFromJSON() async {
-    // print('Start updateFromJSON...');
-
-    await _initData();
-  }
-
-  Future<void> _fetchFromJSON() {
-    // print('_fetchFromJSON...');
-    return Future.delayed(const Duration(milliseconds: 200), () async {
-      final Directory? externalDir = Platform.isAndroid
-          ? await getExternalStorageDirectory()
-          : await getApplicationDocumentsDirectory();
-      final String path = '${externalDir?.path}/books';
-      List<FileSystemEntity> files = Directory(path).listSync();
-      int length = books.length;
-      int index = 0;
-      for (FileSystemEntity file in files) {
-        if (file is File) {
-          if (index > length) {
-            return;
-          } else {
-            String content = await file.readAsString();
-            Map<String, dynamic> jsonMap = jsonDecode(content);
-
-            if (jsonMap['customTitle'] != books[index].customTitle) {
-              books[index].customTitle = jsonMap['customTitle'];
-              // print('Updating customTitle...');
-            }
-            if (jsonMap['author'] != books[index].author) {
-              books[index].author = jsonMap['author'];
-              // print('Updating author...');
-            }
-            if (jsonMap['progress'] != books[index].progress) {
-              // print('Updating progress...');
-              // print('Inside Book ${books[index].progress}');
-              // print('Inside JSON ${jsonMap['progress']}');
-              setState(() {
-                books[index].progress = jsonMap['progress'];
-              });
-            }
-          }
-          index = index + 1;
-        }
-      }
-      // for (var item in books) {
-      //   print('Book ${item.customTitle} = ${item.progress}');
-      // }
-      setState(() {
-        books;
-      });
-    });
-  }
-
   Future<void> _initData() async {
-    // print('Start _initData => processFiles');
-    await processFiles();
-    setState(() {});
-  }
-
-  Future<void> processFiles() async {
-    final Directory? externalDir = Platform.isAndroid
-        ? await getExternalStorageDirectory()
-        : await getApplicationDocumentsDirectory();
-    final String path = '${externalDir?.path}/books';
-    final Directory booksDir = Directory(path);
-
-    // Проверяем, существует ли уже директория, если нет - создаем
-    if (!await booksDir.exists()) {
-      await booksDir.create(recursive: true);
+    final prefs = await SharedPreferences.getInstance();
+    final str = prefs.getString("booksRecentSort");
+    if (str == null) {
+      _selectedSort = BooksSort.dateAddedDesc;
+    } else {
+      _selectedSort = BooksSort.fromString(str);
     }
-
-    List<FileSystemEntity> files = Directory(path).listSync();
-    List<Future<Book>> futures = [];
-
-    // print(files);
-    for (FileSystemEntity file in files) {
-      if (file is File) {
-        Future<Book> futureBook = _readBookFromFile(file);
-        futures.add(futureBook);
-      }
-    }
-
-    List<Book> loadedBooks = await Future.wait(futures);
-
-    books.addAll(loadedBooks);
-  }
-
-  Future<Book> _readBookFromFile(File file) async {
-    try {
-      String content = await file.readAsString();
-      Map<String, dynamic> jsonMap = jsonDecode(content);
-      Book book = Book.fromJson(jsonMap);
-      return book;
-    } catch (e) {
-      print('Error reading file: $e');
-      return Book(
-          filePath: '',
-          text: '',
-          title: '',
-          author: '',
-          lastPosition: 0,
-          imageBytes: null,
-          progress: 0,
-          customTitle: '');
+    if (mounted) {
+      final cubit = context.read<BooksRecentCubit>();
+      cubit.setSort(_selectedSort);
+      cubit.load();
     }
   }
 
@@ -217,9 +85,11 @@ class RecentPageState extends State<RecentPage> {
     }
   }
 
-  void showInputDialog(BuildContext context, String yourVariable, int index) {
+  void showInputDialog(BuildContext context, String yourVariable, int index,
+      List<BookItem> books) {
     String updatedValue = "";
 
+    final cubit = context.read<BooksRecentCubit>();
     showDialog(
       context: context,
       builder: (BuildContext context) {
@@ -257,12 +127,12 @@ class RecentPageState extends State<RecentPage> {
                   } else {
                     if (yourVariable == 'authorInput') {
                       await books[index].updateAuthorInFile(updatedValue);
-                      await _fetchFromJSON();
+                      cubit.refreshBook(books[index], author: updatedValue);
                     } else if (yourVariable == 'bookNameInput') {
                       await books[index].updateTitleInFile(updatedValue);
-                      await _fetchFromJSON();
+                      cubit.refreshBook(books[index],
+                          customTitle: updatedValue);
                     }
-                    // ignore: use_build_context_synchronously
                     Navigator.of(context).pop();
                   }
                 },
@@ -283,15 +153,8 @@ class RecentPageState extends State<RecentPage> {
     });
   }
 
-  bool checkBooks() {
-    if (books.isNotEmpty) {
-      return false;
-    } else {
-      return true;
-    }
-  }
-
-  void _showBlurMenu(context, int index) async {
+  void _showBlurMenu(
+      BuildContext context, int index, List<BookItem> books) async {
     final RenderObject? overlay =
         Overlay.of(context).context.findRenderObject();
     final result = await showMenu(
@@ -330,7 +193,7 @@ class RecentPageState extends State<RecentPage> {
         const PopupMenuItem(
           value: 'delete',
           child: Text(
-            "Удалить",
+            "Удалить из последних",
             style: TextStyle(color: Colors.red, fontSize: 13),
           ),
         ),
@@ -339,45 +202,50 @@ class RecentPageState extends State<RecentPage> {
 
     switch (result) {
       case 'change-author':
-        showInputDialog(context, 'authorInput', index);
+        showInputDialog(context, 'authorInput', index, books);
         break;
       case 'change-title':
-        showInputDialog(context, 'bookNameInput', index);
+        showInputDialog(context, 'bookNameInput', index, books);
         break;
       case 'delete':
+        final cubit = context.read<BooksRecentCubit>();
         showDialog(
           context: context,
           builder: (BuildContext context) {
             return BackdropFilter(
               filter: ImageFilter.blur(sigmaX: 5, sigmaY: 5),
-              child: AlertDialog(
-                shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(10.0)),
-                title: Text(books[index].customTitle),
-                content: const Text("Вы уверены, что хотите удалить книгу?"),
-                actions: <Widget>[
-                  TextButton(
-                    onPressed: () {
-                      Navigator.of(context).pop();
-                    },
-                    child: const TextForTable(
-                      text: "Отмена",
-                      textColor: MyColors.black,
-                    ),
-                  ),
-                  TextButton(
-                    onPressed: () {
-                      books[index].deleteFileByTitle(books[index].title);
-                      books.removeAt(index);
-                      setState(() {});
-                      Navigator.of(context).pop();
-                    },
-                    child: const Text(
-                      "Удалить",
-                      style: TextStyle(color: Colors.red),
-                    ),
-                  ),
-                ],
+              child: BlocBuilder<BooksRecentCubit, BooksRecentState>(
+                bloc: cubit,
+                builder: (context, state) {
+                  return AlertDialog(
+                    shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(10.0)),
+                    title: Text(books[index].customTitle),
+                    content:
+                        const Text("Вы уверены, что хотите удалить книгу?"),
+                    actions: <Widget>[
+                      TextButton(
+                        onPressed: () {
+                          Navigator.of(context).pop();
+                        },
+                        child: const TextForTable(
+                          text: "Отмена",
+                          textColor: MyColors.black,
+                        ),
+                      ),
+                      TextButton(
+                        onPressed: () {
+                          cubit.deleteBook(books[index]);
+                          Navigator.of(context).pop();
+                        },
+                        child: const Text(
+                          "Удалить",
+                          style: TextStyle(color: Colors.red),
+                        ),
+                      ),
+                    ],
+                  );
+                },
               ),
             );
           },
@@ -399,138 +267,181 @@ class RecentPageState extends State<RecentPage> {
             .floor();
     return Scaffold(
       body: SafeArea(
-        child: Stack(
-          children: [
-            const Padding(
-              padding: EdgeInsets.fromLTRB(18, 20, 24, 16),
-              child: Text24(
-                text: "Последнее",
-              ),
-            ),
-            Center(
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  if (books.isEmpty)
-                    TextTektur(
-                        text: "Пока вы не добавили никаких книг",
-                        fontsize: 16,
-                        textColor: MyColors.grey)
-                ],
-              ),
-            ),
-            Padding(
-              padding: const EdgeInsets.only(top: 72),
-              child: OrientationBuilder(builder: (context, orientation) {
-                return DynamicHeightGridView(
-                  controller: _scrollController,
-                  itemCount: books.length,
-                  crossAxisSpacing: 10,
-                  mainAxisSpacing: 10,
-                  crossAxisCount: booksInWidth,
-                  builder: (ctx, index) {
-                    return GestureDetector(
-                      onTap: () async {
-                        if (!_isOperationInProgress) {
-                          _isOperationInProgress = true;
-                          try {
-                            await sendFileTitle(books[index].title);
-                            if (isSended) {
-                              isSended = false;
-                              // ignore: use_build_context_synchronously
-                              Navigator.of(context)
-                                  .pushNamed(RouteNames.reader)
-                                  .then(
-                                      (value) async => await _fetchFromJSON());
-                            }
-                          } catch (e) {
-                            // Обработка ошибок, если необходимо
-                          } finally {
-                            _isOperationInProgress = false;
-                            // if (mounted) setState(() {});
-                          }
-                        }
-                      },
-                      onTapDown: (position) {
-                        _getTapPosition(position);
-                      },
-                      onLongPress: () {
-                        // onTapLongPressOne(context, index);
-                        _showBlurMenu(context, index);
-                      },
-                      child: Column(
-                        children: [
-                          if (books[index].imageBytes != null)
-                            Stack(
-                              alignment: Alignment.bottomCenter,
-                              children: [
-                                books[index].imageBytes?.first != 0
-                                    ? Image.memory(
-                                        books[index].imageBytes!,
-                                        width: bookWidth,
-                                        height: bookHeight,
-                                        fit: BoxFit.fill,
-                                      )
-                                    : SvgPicture.asset(
-                                        'assets/icon/no_name_book.svg',
-                                        width: bookWidth,
-                                        height: bookHeight,
-                                        fit: BoxFit.fitHeight,
-                                      ),
-                                Positioned.fill(
-                                  child: Align(
-                                    alignment: Alignment.bottomCenter,
-                                    child: Container(
-                                      height: 50,
-                                      decoration: BoxDecoration(
-                                        gradient: LinearGradient(
-                                          begin: Alignment.bottomCenter,
-                                          end: Alignment.topCenter,
-                                          colors: [
-                                            Colors.black.withOpacity(0.8),
-                                            Colors.transparent,
-                                          ],
-                                        ),
-                                      ),
-                                    ),
-                                  ),
-                                ),
-                                Positioned(
-                                    bottom: 10,
-                                    left: 10,
-                                    right: 10,
-                                    child: LinearProgressIndicator(
-                                      minHeight: 4,
-                                      value: books[index].progress,
-                                      backgroundColor: Colors.white,
-                                      valueColor:
-                                          const AlwaysStoppedAnimation<Color>(
-                                              MyColors.purple),
-                                    )),
-                              ],
-                            ),
-                          const SizedBox(height: 4),
-                          Text(books[index].author.length > 15
-                              ? '${books[index].author.substring(0, books[index].author.length ~/ 1.5)}...'
-                              : books[index].author),
-                          Text(
-                            books[index].customTitle.length > 20
-                                ? books[index].customTitle.length > 15
-                                    ? '${books[index].customTitle.substring(0, books[index].customTitle.length ~/ 2.5)}...'
-                                    : '${books[index].customTitle.substring(0, books[index].customTitle.length ~/ 2)}...'
-                                : books[index].customTitle,
-                            maxLines: 1,
-                            textAlign: TextAlign.center,
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                        ],
-                      ),
-                    );
+        child: BlocBuilder<BooksRecentCubit, BooksRecentState>(
+          builder: (context, state) {
+            return Stack(
+              children: [
+                BooksPageHeader(
+                  title: "Последнее",
+                  sort: _selectedSort,
+                  onSortChanged: (sort) async {
+                    final cubit = context.read<BooksRecentCubit>();
+                    cubit.setSort(sort);
+                    cubit.filterAndSort();
+
+                    final prefs = await SharedPreferences.getInstance();
+                    await prefs.setString("booksRecentSort", sort.name);
+
+                    setState(() {
+                      _selectedSort = sort;
+                    });
                   },
-                );
-              }),
-            ),
-          ],
+                  onSearch: (query) {
+                    final cubit = context.read<BooksRecentCubit>();
+                    cubit.setSearchQuery(query);
+                    cubit.filterAndSort();
+                  },
+                ),
+                Center(
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      switch (state) {
+                        BooksRecentStateInitial() ||
+                        BooksRecentStateLoading() =>
+                          const CircularProgressIndicator(
+                            color: MyColors.purple,
+                          ),
+                        BooksRecentStateLoaded(:final books)
+                            when books.isEmpty =>
+                          TextTektur(
+                              text: "Пока вы не прочли никаких книг",
+                              fontsize: 16,
+                              textColor: MyColors.grey),
+                        _ => const SizedBox.shrink()
+                      }
+                    ],
+                  ),
+                ),
+                Padding(
+                  padding: const EdgeInsets.only(top: 72),
+                  child: OrientationBuilder(builder: (context, orientation) {
+                    switch (state) {
+                      case BooksRecentStateLoaded(:final books):
+                        return DynamicHeightGridView(
+                          controller: _scrollController,
+                          itemCount: books.length,
+                          crossAxisSpacing: 10,
+                          mainAxisSpacing: 20,
+                          crossAxisCount: booksInWidth,
+                          builder: (ctx, index) {
+                            return GestureDetector(
+                              key: ValueKey(books[index].title),
+                              onTap: () async {
+                                if (!_isOperationInProgress) {
+                                  _isOperationInProgress = true;
+                                  try {
+                                    await sendFileTitle(books[index].title);
+                                    if (isSended) {
+                                      isSended = false;
+                                      final cubit =
+                                          context.read<BooksRecentCubit>();
+                                      Navigator.of(context)
+                                          .pushNamed(RouteNames.reader)
+                                          .then((progress) => cubit.refreshBook(
+                                              books[index],
+                                              progress: progress as double));
+                                    }
+                                  } catch (e) {
+                                    // Обработка ошибок, если необходимо
+                                  } finally {
+                                    _isOperationInProgress = false;
+                                    // if (mounted) setState(() {});
+                                  }
+                                }
+                              },
+                              onTapDown: (position) {
+                                _getTapPosition(position);
+                              },
+                              onLongPress: () {
+                                // onTapLongPressOne(context, index);
+                                _showBlurMenu(context, index, books);
+                              },
+                              child: Column(
+                                children: [
+                                  if (books[index].imageBytes != null)
+                                    Stack(
+                                      alignment: Alignment.bottomCenter,
+                                      children: [
+                                        books[index].imageBytes?.first != 0
+                                            ? Image.memory(
+                                                books[index].imageBytes!,
+                                                width: bookWidth,
+                                                height: bookHeight,
+                                                fit: BoxFit.fill,
+                                              )
+                                            : SvgPicture.asset(
+                                                'assets/icon/no_name_book.svg',
+                                                width: bookWidth,
+                                                height: bookHeight,
+                                                fit: BoxFit.fitHeight,
+                                              ),
+                                        Positioned.fill(
+                                          child: Align(
+                                            alignment: Alignment.bottomCenter,
+                                            child: Container(
+                                              height: 50,
+                                              decoration: BoxDecoration(
+                                                gradient: LinearGradient(
+                                                  begin: Alignment.bottomCenter,
+                                                  end: Alignment.topCenter,
+                                                  colors: [
+                                                    Colors.black
+                                                        .withOpacity(0.8),
+                                                    Colors.transparent,
+                                                  ],
+                                                ),
+                                              ),
+                                            ),
+                                          ),
+                                        ),
+                                        Positioned(
+                                            bottom: 10,
+                                            left: 10,
+                                            right: 10,
+                                            child: LinearProgressIndicator(
+                                              minHeight: 4,
+                                              value: books[index].progress,
+                                              backgroundColor: Colors.white,
+                                              valueColor:
+                                                  const AlwaysStoppedAnimation<
+                                                      Color>(MyColors.purple),
+                                            )),
+                                      ],
+                                    ),
+                                  const SizedBox(height: 4),
+                                  Text(
+                                    books[index].author.length > 15
+                                        ? '${books[index].author.substring(0, books[index].author.length ~/ 1.5)}...'
+                                        : books[index].author,
+                                    style:
+                                        Theme.of(context).textTheme.bodySmall,
+                                  ),
+                                  const SizedBox(height: 4),
+                                  Text(
+                                    books[index].customTitle.length > 40
+                                        ? books[index].customTitle.length > 30
+                                            ? '${books[index].customTitle.substring(0, books[index].customTitle.length ~/ 2.5)}...'
+                                            : '${books[index].customTitle.substring(0, books[index].customTitle.length ~/ 2)}...'
+                                        : books[index].customTitle,
+                                    maxLines: 2,
+                                    textAlign: TextAlign.center,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: const TextStyle(height: 1.2),
+                                  ),
+                                ],
+                              ),
+                            );
+                          },
+                        );
+                      default:
+                        return const SizedBox.shrink();
+                    }
+                  }),
+                ),
+              ],
+            );
+          },
         ),
       ),
     );

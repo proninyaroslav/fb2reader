@@ -3,15 +3,13 @@ import 'dart:io';
 import 'dart:math';
 
 import 'package:flutter/material.dart';
-import 'package:fluttertoast/fluttertoast.dart';
+import 'package:html/parser.dart' show parse;
+import 'package:http/http.dart' as http;
 import 'package:json_annotation/json_annotation.dart';
 import 'package:merlin/pages/wordmode/models/word_entry.dart';
-import 'package:merlin/style/text.dart';
 import 'package:merlin/style/colors.dart';
+import 'package:merlin/style/text.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-
-import 'package:http/http.dart' as http;
-import 'package:html/parser.dart' show parse;
 
 part 'wordmode.g.dart';
 
@@ -27,7 +25,8 @@ class WordCount {
     this.wordEntries = const [],
   });
 
-  factory WordCount.fromJson(Map<String, dynamic> json) => _$WordCountFromJson(json);
+  factory WordCount.fromJson(Map<String, dynamic> json) =>
+      _$WordCountFromJson(json);
 
   Map<String, dynamic> toJson() => _$WordCountToJson(this);
 
@@ -42,7 +41,8 @@ class WordCount {
     _lastCallTimestamp = DateTime.now();
 
     await prefs.setInt('callCount', _callCount);
-    await prefs.setString('lastCallTimestamp', _lastCallTimestamp!.toIso8601String());
+    await prefs.setString(
+        'lastCallTimestamp', _lastCallTimestamp!.toIso8601String());
   }
 
   Future<void> loadCallInfo() async {
@@ -50,16 +50,22 @@ class WordCount {
 
     _callCount = prefs.getInt('callCount') ?? 0;
     final lastCallTimestampStr = prefs.getString('lastCallTimestamp');
-    _lastCallTimestamp = lastCallTimestampStr != null ? DateTime.parse(lastCallTimestampStr) : null;
+    _lastCallTimestamp = lastCallTimestampStr != null
+        ? DateTime.parse(lastCallTimestampStr)
+        : null;
   }
 
   Future<String> translateToEnglish(String word) async {
-    final response = await http.get(Uri.parse('https://translate.googleapis.com/translate_a/single?client=gtx&sl=ru&tl=en&dt=t&q=$word'));
+    final response = await http.get(Uri.parse(
+        'https://translate.googleapis.com/translate_a/single?client=gtx&sl=ru&tl=en&dt=t&q=$word'));
 
     if (response.statusCode == 200) {
       final data = json.decode(response.body);
       if (data.length >= 1 && data[0].length >= 1 && data[0][0].length >= 3) {
-        return data[0][0][0].toString().replaceAll(RegExp(r'[\[\].,;!?():]'), '').toLowerCase();
+        return data[0][0][0]
+            .toString()
+            .replaceAll(RegExp(r'[\[\].,;!?():]'), '')
+            .toLowerCase();
       } else {
         return 'Translation not available';
       }
@@ -107,20 +113,23 @@ class WordCount {
       final now = DateTime.now();
       final timeElapsed = now.difference(_lastCallTimestamp!);
 
+      await countWordsWithOffset();
+      await updateCallInfo();
+      // TODO: пока убрано
       // Проверяем, прошло ли более 24 часов с момента последнего вызова
-      if (timeElapsed.inHours >= 24) { // TODO
-        // if (timeElapsed.inMicroseconds >= 1) {
-        await countWordsWithOffset();
+      // if (timeElapsed.inHours >= 24) { // TODO
+      //   // if (timeElapsed.inMicroseconds >= 1) {
+      //   await countWordsWithOffset();
 
-        await updateCallInfo();
-      } else {
-        Fluttertoast.showToast(
-          msg: 'Можно только раз в 24 часа!',
-          toastLength: Toast.LENGTH_SHORT, // Длительность отображения
-          gravity: ToastGravity.BOTTOM, // Расположение уведомления
-        );
-        return;
-      }
+      //   await updateCallInfo();
+      // } else {
+      //   Fluttertoast.showToast(
+      //     msg: 'Можно только раз в 24 часа!',
+      //     toastLength: Toast.LENGTH_SHORT, // Длительность отображения
+      //     gravity: ToastGravity.BOTTOM, // Расположение уведомления
+      //   );
+      //   return;
+      // }
     } else {
       await countWordsWithOffset();
       await updateCallInfo();
@@ -128,14 +137,17 @@ class WordCount {
   }
 
   Future<Map<String, int>> getAllWordCounts() async {
-    final textWithoutPunctuation = fileText.replaceAll(RegExp(r'[.,;!?():]'), '');
+    final textWithoutPunctuation =
+        fileText.replaceAll(RegExp(r'[.,;!?():]'), '');
     final words = textWithoutPunctuation.split(RegExp(r'\s+'));
 
     final wordCounts = <String, int>{};
 
     for (final word in words) {
       final normalizedWord = word.toLowerCase();
-      if (normalizedWord.length > 1 && !RegExp(r'[0-9]').hasMatch(normalizedWord) && normalizedWord != '-') {
+      if (normalizedWord.length > 1 &&
+          !RegExp(r'[0-9]').hasMatch(normalizedWord) &&
+          normalizedWord != '-') {
         if (wordCounts.containsKey(normalizedWord)) {
           wordCounts[normalizedWord] = (wordCounts[normalizedWord] ?? 0) + 1;
         } else {
@@ -148,14 +160,17 @@ class WordCount {
   }
 
   Future<List<String>> getAllWords() async {
-    final textWithoutPunctuation = fileText.replaceAll(RegExp(r'[.,;!?():"\\"]'), '');
+    final textWithoutPunctuation =
+        fileText.replaceAll(RegExp(r'[.,;!?():"\\"]'), '');
     final words = textWithoutPunctuation.split(RegExp(r'\s+'));
 
     List<String> wordCounts = [];
 
     for (final word in words) {
       final normalizedWord = word.toLowerCase();
-      if (normalizedWord.length > 1 && !RegExp(r'[0-9]').hasMatch(normalizedWord) && normalizedWord != '-') {
+      if (normalizedWord.length > 1 &&
+          !RegExp(r'[0-9]').hasMatch(normalizedWord) &&
+          normalizedWord != '-') {
         wordCounts.add(normalizedWord);
       }
     }
@@ -163,14 +178,17 @@ class WordCount {
   }
 
   int getWordCount(String wordToCount) {
-    final textWithoutPunctuation = fileText.replaceAll(RegExp(r'[.,;!?():]'), '');
+    final textWithoutPunctuation =
+        fileText.replaceAll(RegExp(r'[.,;!?():]'), '');
     final words = textWithoutPunctuation.split(RegExp(r'\s+'));
 
     final wordCounts = <String, int>{};
 
     for (final word in words) {
       final normalizedWord = word.toLowerCase();
-      if (normalizedWord.length > 1 && !RegExp(r'[0-9]').hasMatch(normalizedWord) && normalizedWord != '-') {
+      if (normalizedWord.length > 1 &&
+          !RegExp(r'[0-9]').hasMatch(normalizedWord) &&
+          normalizedWord != '-') {
         if (wordCounts.containsKey(normalizedWord)) {
           wordCounts[normalizedWord] = (wordCounts[normalizedWord] ?? 0) + 1;
         } else {
@@ -247,7 +265,8 @@ class WordCount {
         'accept': 'application/json',
         'Content-Type': 'application/json',
       },
-      body: jsonEncode({'words': inputWords}), // Преобразуйте объект в JSON-строку
+      body: jsonEncode(
+          {'words': inputWords}), // Преобразуйте объект в JSON-строку
     );
     // debugPrint('getNounsByList response ${response.body}');
     if (response.statusCode == 200) {
@@ -307,7 +326,8 @@ class WordCount {
 
   Future<void> countWordsWithOffset() async {
     final wordCounts = await getAllWordCounts();
-    final sortedWordCounts = wordCounts.entries.toList()..sort((a, b) => b.value.compareTo(a.value));
+    final sortedWordCounts = wordCounts.entries.toList()
+      ..sort((a, b) => b.value.compareTo(a.value));
 
     final prefs = await SharedPreferences.getInstance();
     int getWords = prefs.getInt('words') ?? 10;
@@ -325,15 +345,20 @@ class WordCount {
     // Загрузка исторических слов
     String historyKey = 'WMWORDS_HISTORY';
     String? historyData = prefs.getString(historyKey);
-    List<String> historyWords = historyData != null ? List<String>.from(jsonDecode(historyData)) : [];
+    List<String> historyWords =
+        historyData != null ? List<String>.from(jsonDecode(historyData)) : [];
 
     List<String> checkWords = [];
     int currentIndex = start;
 
-    while (checkWords.length < end - start && currentIndex < sortedWordCounts.length) {
+    while (checkWords.length < end - start &&
+        currentIndex < sortedWordCounts.length) {
       List<String> newWords = [];
 
-      for (; currentIndex < sortedWordCounts.length && newWords.length < (end - start - checkWords.length); currentIndex++) {
+      for (;
+          currentIndex < sortedWordCounts.length &&
+              newWords.length < (end - start - checkWords.length);
+          currentIndex++) {
         var currentWord = sortedWordCounts[currentIndex].key;
         if (!historyWords.contains(currentWord)) {
           newWords.add(currentWord);
@@ -349,7 +374,8 @@ class WordCount {
       }
     }
 
-    checkWords = checkWords.sublist(0, min(checkWords.length, end - start)); // Обрезаем список до нужной длины
+    checkWords = checkWords.sublist(0,
+        min(checkWords.length, end - start)); // Обрезаем список до нужной длины
 
     final wordEntriesFutures = <Future<WordEntry>>[];
     for (var word in checkWords) {
@@ -370,21 +396,25 @@ class WordCount {
 
     prefs.setInt('$filePath-end', min(end, sortedWordCounts.length));
     prefs.setInt('words', 10);
-    this.wordEntries = wordEntries; // Присваиваем wordEntries к текущим wordEntries
+    this.wordEntries =
+        wordEntries; // Присваиваем wordEntries к текущим wordEntries
 
     // Сохранение обновленной истории слов
     prefs.setString(historyKey, jsonEncode(historyWords));
   }
 
   Future<void> countWordsWithOffsetNoTrans() async {
-    final textWithoutPunctuation = fileText.replaceAll(RegExp(r'[.,;!?():]'), '');
+    final textWithoutPunctuation =
+        fileText.replaceAll(RegExp(r'[.,;!?():]'), '');
     final words = textWithoutPunctuation.split(RegExp(r'\s+'));
 
     final wordCounts = <String, int>{};
 
     for (final word in words) {
       final normalizedWord = word.toLowerCase();
-      if (normalizedWord.length > 3 && !RegExp(r'[0-9]').hasMatch(normalizedWord) && normalizedWord != '-') {
+      if (normalizedWord.length > 3 &&
+          !RegExp(r'[0-9]').hasMatch(normalizedWord) &&
+          normalizedWord != '-') {
         if (wordCounts.containsKey(normalizedWord)) {
           wordCounts[normalizedWord] = (wordCounts[normalizedWord] ?? 0) + 1;
         } else {
@@ -393,7 +423,8 @@ class WordCount {
       }
     }
 
-    final sortedWordCounts = wordCounts.entries.toList()..sort((a, b) => b.value.compareTo(a.value));
+    final sortedWordCounts = wordCounts.entries.toList()
+      ..sort((a, b) => b.value.compareTo(a.value));
 
     final prefs = await SharedPreferences.getInstance();
     int getWords = prefs.getInt('words') ?? 10;
@@ -439,7 +470,8 @@ class WordCount {
     );
   }
 
-  Future<List<WordEntry>> processSingleWord(String newWord, List<WordEntry> wordEntries) async {
+  Future<List<WordEntry>> processSingleWord(
+      String newWord, List<WordEntry> wordEntries) async {
     final normalizedWord = newWord.toLowerCase();
 
     // Check conditions for the word
@@ -458,7 +490,8 @@ class WordCount {
     );
 
     // Make sure the list is modifiable
-    List<WordEntry> modifiableWordEntries = List<WordEntry>.of(wordEntries, growable: true);
+    List<WordEntry> modifiableWordEntries =
+        List<WordEntry>.of(wordEntries, growable: true);
 
     // Add the new WordEntry to the list
     modifiableWordEntries.add(newWordEntry);
@@ -509,10 +542,12 @@ class AgreementDialog extends StatelessWidget {
                 Expanded(
                     child: Container(
                   decoration: BoxDecoration(
-                    border: !Platform.isIOS ? Border.all(
-                      color: Colors.black,
-                      width: 0.2,
-                    ) : null,
+                    border: !Platform.isIOS
+                        ? Border.all(
+                            color: Colors.black,
+                            width: 0.2,
+                          )
+                        : null,
                   ),
                   child: TextButton(
                     onPressed: () {
@@ -527,10 +562,12 @@ class AgreementDialog extends StatelessWidget {
                 Expanded(
                   child: Container(
                     decoration: BoxDecoration(
-                      border: !Platform.isIOS ? Border.all(
-                        color: Colors.black,
-                        width: 0.2,
-                      ) : null,
+                      border: !Platform.isIOS
+                          ? Border.all(
+                              color: Colors.black,
+                              width: 0.2,
+                            )
+                          : null,
                     ),
                     child: TextButton(
                       onPressed: () {
@@ -538,7 +575,10 @@ class AgreementDialog extends StatelessWidget {
                       },
                       child: const Text(
                         'Нет',
-                        style: TextStyle(fontSize: 18, color: Colors.red, fontFamily: 'Tektur'),
+                        style: TextStyle(
+                            fontSize: 18,
+                            color: Colors.red,
+                            fontFamily: 'Tektur'),
                       ),
                     ),
                   ),

@@ -8,7 +8,7 @@ part of 'word_entry.dart';
 
 WordEntry _$WordEntryFromJson(Map<String, dynamic> json) => WordEntry(
       word: json['word'] as String,
-      count: json['count'] as int,
+      count: (json['count'] as num).toInt(),
       translation: json['translation'] as String?,
       ipa: json['ipa'] as String?,
     );

@@ -1,28 +1,44 @@
+import 'package:appmetrica_plugin/appmetrica_plugin.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:merlin/UI/theme/theme.dart';
-import 'package:merlin/style/colors.dart';
 import 'package:merlin/UI/router.dart';
-
+import 'package:merlin/UI/theme/theme.dart';
+import 'package:merlin/domain/data_providers/sembast_provider.dart';
+import 'package:merlin/domain/workmanager.dart';
+import 'package:merlin/style/colors.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:appmetrica_plugin/appmetrica_plugin.dart';
+import 'package:workmanager/workmanager.dart';
 
 AppMetricaConfig get _config =>
     const AppMetricaConfig('122d6c68-55d1-46bf-bf45-27036d6307cf', logs: true);
 
-
 Future<void> main() async {
-  AppMetrica.runZoneGuarded(() {
+  AppMetrica.runZoneGuarded(() async {
     WidgetsFlutterBinding.ensureInitialized();
     AppMetrica.activate(_config);
+
+    await SembastProvider.init();
+    await _initWorkmanager();
+
     runApp(
       ChangeNotifierProvider(
-        create: (context) => ThemeProvider(), // Создание экземпляра ThemeProvider
+        create: (context) =>
+            ThemeProvider(), // Создание экземпляра ThemeProvider
         child: const MerlinApp(),
       ),
     );
   });
+}
+
+Future<void> _initWorkmanager() async {
+  final wm = Workmanager();
+  await wm.initialize(
+    callbackDispatcher,
+    isInDebugMode: kDebugMode,
+  );
+  initWmPorts();
 }
 
 class MerlinApp extends StatefulWidget {
@@ -68,7 +84,8 @@ class ThemeProvider with ChangeNotifier {
     _isDarkTheme = value;
     setSystemUIOverlayStyle(SystemUiOverlayStyle(
       systemNavigationBarColor: value ? MyColors.blackGray : MyColors.white,
-      systemNavigationBarIconBrightness: value ? Brightness.light : Brightness.dark,
+      systemNavigationBarIconBrightness:
+          value ? Brightness.light : Brightness.dark,
     ));
     notifyListeners();
   }

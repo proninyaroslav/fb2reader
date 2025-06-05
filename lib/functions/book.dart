@@ -1,9 +1,8 @@
 import 'dart:convert';
 import 'dart:io';
-import 'dart:typed_data';
 
-import 'package:merlin/pages/reader/reader.dart';
-import 'package:merlin/pages/recent/recent.dart';
+import 'package:flutter/foundation.dart';
+import 'package:merlin/functions/image.dart';
 import 'package:path_provider/path_provider.dart';
 
 class LastPosition {
@@ -22,6 +21,34 @@ class LastPosition {
       offset: json['offset'],
     );
   }
+
+  @override
+  String toString() {
+    return 'LastPosition {paragraph: $paragraph, offset: $offset}';
+  }
+}
+
+class BookSequence {
+  String name;
+  String? number;
+
+  BookSequence({required this.name, required this.number});
+
+  Map<String, dynamic> toJson() {
+    return {'name': name, 'number': number};
+  }
+
+  factory BookSequence.fromJson(Map<String, dynamic> json) {
+    return BookSequence(
+      name: json['name'],
+      number: json['number'],
+    );
+  }
+
+  @override
+  String toString() {
+    return 'BookSequence {name: $name, number: $number}';
+  }
 }
 
 class BookInfo {
@@ -32,12 +59,16 @@ class BookInfo {
   double? lastPosition; // маяк BookInfo
   int version;
   LastPosition? lp;
+  BookSequence? sequence;
+  DateTime dateAdded;
 
   BookInfo(
       {required this.filePath,
       required this.fileText,
       required this.title,
       required this.author,
+      required this.sequence,
+      required this.dateAdded,
       this.version = 1,
       this.lastPosition = 0,
       this.lp});
@@ -49,7 +80,9 @@ class BookInfo {
       'title': title,
       'author': author,
       'lastPosition': lastPosition,
-      'lp': lp
+      'lp': lp?.toJson(),
+      'sequence': sequence?.toJson(),
+      'dateAdded': dateAdded.toIso8601String(),
     };
   }
 
@@ -59,27 +92,35 @@ class BookInfo {
 
   factory BookInfo.fromJson(Map<String, dynamic> json) {
     return BookInfo(
-      filePath: json['filePath'],
-      fileText: json['fileText'],
-      title: json['title'],
-      author: json['author'],
-      lastPosition: json['lastPosition'],
-      lp: LastPosition.fromJson(json['lp'])
-    );
+        filePath: json['filePath'],
+        fileText: json['fileText'],
+        title: json['title'],
+        author: json['author'],
+        lastPosition: json['lastPosition'],
+        lp: LastPosition.fromJson(json['lp']),
+        sequence: json['sequence'] == null
+            ? null
+            : BookSequence.fromJson(json['sequence']),
+        dateAdded: (json['dateAdded'] == null
+                ? null
+                : DateTime.tryParse(json['dateAdded'])) ??
+            DateTime.fromMillisecondsSinceEpoch(0));
   }
 }
 
 class Book {
-  String filePath;
-  String text;
-  String title;
-  String customTitle;
-  String author;
-  double? lastPosition = 0;
-  Uint8List? imageBytes;
-  double? progress;
-  LastPosition? lp;
-  int version;
+  final String filePath;
+  final String text;
+  final String title;
+  final String customTitle;
+  final String author;
+  final double? lastPosition;
+  final Uint8List? imageBytes;
+  final double? progress;
+  final LastPosition? lp;
+  final int version;
+  final BookSequence? sequence;
+  final DateTime dateAdded;
 
   Book(
       {required this.filePath,
@@ -87,7 +128,9 @@ class Book {
       required this.title,
       required this.customTitle,
       required this.author,
-      required this.lastPosition,
+      this.lastPosition = 0,
+      required this.sequence,
+      required this.dateAdded,
       this.imageBytes,
       this.progress,
       this.lp,
@@ -103,12 +146,14 @@ class Book {
         lastPosition: bookInfo.lastPosition,
         imageBytes: imageInfo.imageBytes,
         progress: imageInfo.progress,
-        version: bookInfo.version);
+        version: bookInfo.version,
+        sequence: bookInfo.sequence,
+        dateAdded: bookInfo.dateAdded);
   }
 
   @override
   String toString() {
-    return 'Book {filePath: $filePath, title: $title, author: $author, lastPosition: $lastPosition, progress: $progress, text: ${text.substring(0, (text.length * 0.1).toInt())}}';
+    return 'Book {filePath: $filePath, title: $title, author: $author, lastPosition: $lastPosition, progress: $progress, text: ${text.substring(0, (text.length * 0.1).toInt())}}, sequence: $sequence';
   }
 
   Map<String, dynamic> toJson() {
@@ -122,7 +167,9 @@ class Book {
       'text': text,
       'imageBytes': imageBytes?.toList(),
       'version': 2,
-      'lp': lp?.toJson()
+      'lp': lp?.toJson(),
+      'sequence': sequence?.toJson(),
+      'dateAdded': dateAdded.toIso8601String(),
     };
   }
 
@@ -138,8 +185,16 @@ class Book {
         imageBytes: json['imageBytes'] != null
             ? Uint8List.fromList(json['imageBytes'].cast<int>())
             : null,
-        lp: LastPosition.fromJson(json['lp'] ?? {'paragraph': 0, 'offset': 0.0}),
-        version: json['version'] ?? 0);
+        lp: LastPosition.fromJson(
+            json['lp'] ?? {'paragraph': 0, 'offset': 0.0}),
+        version: json['version'] ?? 0,
+        sequence: json['sequence'] == null
+            ? null
+            : BookSequence.fromJson(json['sequence']),
+        dateAdded: (json['dateAdded'] == null
+                ? null
+                : DateTime.tryParse(json['dateAdded'])) ??
+            DateTime.fromMillisecondsSinceEpoch(0));
   }
 
   Future<void> saveJsonToFile(
@@ -161,14 +216,14 @@ class Book {
     }
   }
 
-  Future<void> deleteFileByTitle(String title) async {
+  Future<void> delete() async {
     try {
       final appDir = Platform.isAndroid
           ? await getExternalStorageDirectory()
           : await getApplicationDocumentsDirectory();
-      final filePath = '${appDir?.path}/books/$title.json';
+      final dataFilePath = '${appDir?.path}/books/$title.json';
 
-      final file = File(filePath);
+      final file = File(dataFilePath);
 
       if (await file.exists()) {
         await file.delete();
@@ -176,8 +231,15 @@ class Book {
       } else {
         // print('Файл $title не найден');
       }
+
+      final originalFile = File(filePath);
+      if (await originalFile.exists()) {
+        await originalFile.delete();
+      }
     } catch (e) {
-      // print('Ошибка при удалении файла: $e');
+      if (kDebugMode) {
+        print('Unable to delete original file: $e');
+      }
     }
   }
 
@@ -306,4 +368,49 @@ class Book {
       // print('Ошибка при обновлении прогресса и позиции в файле: $e');
     }
   }
+}
+
+extension BookExtensions on Book {
+  bool filterByMetadata(String? query) =>
+      query == null ||
+      query.isEmpty ||
+      title.toLowerCase().contains(query) ||
+      customTitle.toLowerCase().contains(query) ||
+      author.toLowerCase().contains(query) ||
+      (sequence != null && sequence!.filterByMetadata(query));
+}
+
+extension BookSequenseExtensions on BookSequence {
+  bool filterByMetadata(String? query) =>
+      query == null ||
+      query.isEmpty ||
+      name.toLowerCase().contains(query) ||
+      (number != null && number!.toLowerCase().contains(query));
+}
+
+enum BooksSort {
+  unknown,
+  dateAddedDesc,
+  dateAddedAsc;
+
+  factory BooksSort.fromString(String str) {
+    for (final value in values) {
+      if (value.name == str) {
+        return value;
+      }
+    }
+    return BooksSort.unknown;
+  }
+
+  int sort(Book a, Book b) => switch (this) {
+        BooksSort.unknown => 0,
+        BooksSort.dateAddedDesc => b.dateAdded.compareTo(a.dateAdded),
+        BooksSort.dateAddedAsc => a.dateAdded.compareTo(b.dateAdded)
+      };
+
+  String? toLocalizedString() => switch (this) {
+        BooksSort.unknown => null,
+        BooksSort.dateAddedDesc => "по дате добавления (новые)",
+        BooksSort.dateAddedAsc => "по дате добавления (старые)",
+      };
 }

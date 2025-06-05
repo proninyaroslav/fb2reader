@@ -1,36 +1,35 @@
 import 'dart:async';
+import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_osm_plugin/flutter_osm_plugin.dart';
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:fluttertoast/fluttertoast.dart';
+import 'package:http/http.dart' as http;
 import 'package:intl/intl.dart';
 import 'package:merlin/UI/icon/custom_icon.dart';
 import 'package:merlin/UI/theme/theme.dart';
 import 'package:merlin/components/achievement.dart';
+import 'package:merlin/components/ads/advertisement.dart';
 import 'package:merlin/components/ads/network_provider.dart';
+import 'package:merlin/components/button/button.dart';
 import 'package:merlin/components/svg/svg_widget.dart';
 import 'package:merlin/domain/data_providers/token_provider.dart';
 import 'package:merlin/domain/dto/achievements/get_achievements_response.dart';
+import 'package:merlin/functions/location.dart';
+import 'package:merlin/functions/sendmail.dart';
+import 'package:merlin/main.dart';
 import 'package:merlin/pages/profile/dialogs/choose_avatar_dialog/choose_avatar_dialog.dart';
 import 'package:merlin/pages/profile/profile_view_model.dart';
 import 'package:merlin/style/colors.dart';
 import 'package:merlin/style/text.dart';
-import 'package:merlin/components/button/button.dart';
-import 'package:merlin/functions/sendmail.dart';
-import 'package:merlin/functions/location.dart';
-import 'package:merlin/components/ads/advertisement.dart';
-import 'package:merlin/main.dart';
-import 'dart:convert';
-import 'package:http/http.dart' as http;
 import 'package:path_provider/path_provider.dart';
 import 'package:provider/provider.dart';
-import 'package:url_launcher/url_launcher.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:flutter/services.dart';
-import 'package:yandex_mobileads/mobile_ads.dart';
-import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:url_launcher/url_launcher.dart';
+import 'package:yandex_mobileads/mobile_ads.dart';
 
 class AchievementStatus {
   Achievement achievement;
@@ -99,9 +98,8 @@ class _ProfilePage extends State<ProfilePage> {
     _initAds();
 
     TokenProvider().onTokenChanged.listen((_) {
-      WidgetsBinding.instance.addPostFrameCallback((_){
-        setState(() {
-        });
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        setState(() {});
       });
     });
   }
@@ -126,12 +124,18 @@ class _ProfilePage extends State<ProfilePage> {
   Future<void> _initAds() async {
     _adLoader = await RewardedAdLoader.create(
       onAdLoaded: (RewardedAd rewardedAd) {
-        setState(() => {_ad = rewardedAd, isLoading = false});
+        setState(() {
+          _ad = rewardedAd;
+          isLoading = false;
+        });
         _showRewardedAd();
         // logMessage('callback: rewarded ad loaded');
       },
       onAdFailedToLoad: (error) {
-        setState(() => {_ad = null, isLoading = false});
+        setState(() {
+          _ad = null;
+          isLoading = false;
+        });
         // logMessage('callback: rewarded ad failed to load, '
         //     'code: ${error.code}, description: ${error.description}');
       },
@@ -310,7 +314,7 @@ class _ProfilePage extends State<ProfilePage> {
 
   @override
   Widget build(BuildContext context) {
-    if(authMode) {
+    if (authMode) {
       authMode = false;
       getTokenFromLocalStorage();
       getFirstNameFromLocalStorage();
@@ -435,7 +439,8 @@ class _ProfilePage extends State<ProfilePage> {
                           onPressed: () async {
                             final tgUrl = Uri.parse(
                                 'tg://resolve?domain=merlin_auth_bot&start=1');
-                            await launchUrl(tgUrl, mode: LaunchMode.externalApplication);
+                            await launchUrl(tgUrl,
+                                mode: LaunchMode.externalApplication);
                             authMode = true;
                             //exit(0);
                           },
