@@ -94,7 +94,6 @@ class _ProfilePage extends State<ProfilePage> {
     getTokenFromLocalStorage();
     getFirstNameFromLocalStorage();
     getWordsFromLocalStorage();
-    MobileAds.initialize();
     _initAds();
 
     TokenProvider().onTokenChanged.listen((_) {

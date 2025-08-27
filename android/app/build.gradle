@@ -26,24 +26,20 @@ allprojects {
     repositories {
         google()
         jcenter()
-        maven {
-            url 'https://android-sdk.is.com/'
-        }
-        maven {
-            url 'https://artifact.bytedance.com/repository/pangle'
-        }
-        maven {
-            url "https://sdk.tapjoy.com/"
-        }
-        maven {
-            url "https://dl-maven-android.mintegral.com/repository/mbridge_android_sdk_oversea"
-        }
-        maven {
-            url "https://cboost.jfrog.io/artifactory/chartboost-ads/"
-        }
-        maven {
-            url "https://dl.appnext.com/"
-        }
+        // IronSource
+        maven { url 'https://android-sdk.is.com/' }
+        // Pangle
+        maven { url 'https://artifact.bytedance.com/repository/pangle' }
+        // Tapjoy
+        maven { url "https://sdk.tapjoy.com/" }
+        // Mintegral
+        maven { url "https://dl-maven-android.mintegral.com/repository/mbridge_android_sdk_oversea" }
+        // Chartboost
+        maven { url "https://cboost.jfrog.io/artifactory/chartboost-ads/" }
+        // AppNext
+        maven { url "https://dl.appnext.com/" }
+        // PetalAds
+        maven { url "https://developer.huawei.com/repo/" }
     }
 }
 
@@ -51,7 +47,7 @@ allprojects {
 android {
     namespace "com.nexaecommerce.merlin"
     // compileSdkVersion flutter.compileSdkVersion
-    compileSdkVersion 35
+    compileSdkVersion 36
     ndkVersion "27.0.12077973"
 
     compileOptions {
@@ -109,7 +105,6 @@ flutter {
 
 dependencies {
     // implementation "org.jetbrains.kotlin:kotlin-stdlib-jdk7:$kotlin_version"
-    implementation 'com.yandex.android:mobileads-mediation:7.2.0.0'
+    implementation 'com.yandex.android:mobileads-mediation:7.15.0.1'
     coreLibraryDesugaring 'com.android.tools:desugar_jdk_libs:2.0.4'
 }
-
