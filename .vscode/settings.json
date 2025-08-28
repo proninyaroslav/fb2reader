@@ -1,6 +1,6 @@
 {
-    "editor.mouseWheelZoom": true,
-    "java.configuration.updateBuildConfiguration": "automatic",
-    "java.compile.nullAnalysis.mode": "automatic"
+  "editor.mouseWheelZoom": true,
+  "java.configuration.updateBuildConfiguration": "automatic",
+  "java.compile.nullAnalysis.mode": "automatic",
+  "git.enableCommitSigning": false
 }
-

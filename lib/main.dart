@@ -54,7 +54,7 @@ class _MerlinAppState extends State<MerlinApp> {
 
   late final Future<AppOpenAdLoader> _appOpenAdLoader;
   AppOpenAd? _appOpenAd;
-  final _adUnitId = 'demo-appopenad-yandex'; // TODO
+  final _adUnitId = 'R-M-10590682-3';
   late final _adRequestConfiguration =
       AdRequestConfiguration(adUnitId: _adUnitId);
 
