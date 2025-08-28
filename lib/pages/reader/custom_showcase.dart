@@ -219,7 +219,7 @@ class SecondSlide extends StatelessWidget {
             child: top,
           ),
           Positioned(
-            top: cc.maxHeight / 4,
+            top: cc.maxHeight / 5 + topPadding,
             bottom: cc.maxHeight / 4,
             left: 100,
             right: 100,
